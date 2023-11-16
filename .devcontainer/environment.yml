@@ -1,0 +1,22 @@
+name: env_zoo_calrissian
+channels:
+  - terradue
+  - conda-forge
+  - eoepca
+dependencies:
+  - python
+  - black
+  - pre-commit
+  - isort
+  - flake8
+  - autoflake
+  - pylint
+  - nose2
+  - zoo-calrissian-runner
+  - pip
+  - loguru
+  - pip:
+    - attrs
+    - cwl-utils==0.14
+    - kubernetes
+    - cookiecutter
