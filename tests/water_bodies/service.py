@@ -59,6 +59,15 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         return self.conf.get("additional_parameters", {})
 
     def handle_outputs(self, log, output, usage_report, tool_logs):
+        """
+        Handle the output files of the execution.
+
+        :param log: The application log file of the execution.
+        :param output: The output file of the execution.
+        :param usage_report: The metrics file.
+        :param tool_logs: A list of paths to individual workflow step logs.
+
+        """
         # link element to add to the statusInfo
         servicesLogs = [
             {
@@ -83,7 +92,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         self.conf["service_logs"]["length"] = str(len(servicesLogs))
 
 
-def water_bodies(conf, inputs, outputs):
+def water_bodies(conf, inputs, outputs):  # noqa
     with open(
         os.path.join(
             pathlib.Path(os.path.realpath(__file__)).parent.absolute(),
@@ -116,7 +125,9 @@ def water_bodies(conf, inputs, outputs):
     exit_status = runner.execute()
 
     if exit_status == zoo.SERVICE_SUCCEEDED:
-        out = {"StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]}
+        out = {
+            "StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]
+        }
         json_out_string = json.dumps(out, indent=4)
         outputs["stac"]["value"] = json_out_string
         return zoo.SERVICE_SUCCEEDED
