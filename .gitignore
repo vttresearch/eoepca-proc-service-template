@@ -17,3 +17,4 @@ src/test.cwl
 params.yaml
 temp*
 runs
+*.ipynb

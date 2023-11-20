@@ -25,10 +25,11 @@ inputs:
 outputs:
   StacCatalogUri:
     outputBinding:
-      outputEval: ${  return inputs.STAGEOUT_OUTPUT + "/" + inputs.process + "/catalog.json"; }
+      outputEval: ${  return "s3://" + inputs.STAGEOUT_OUTPUT + "/" + inputs.process + "/catalog.json"; }
     type: string
 baseCommand:
-  - echo
+  - python
+  - stage.py
 arguments:
   - $( inputs.wf_outputs.path )
   - $( inputs.STAGEOUT_OUTPUT )
@@ -39,11 +40,10 @@ requirements:
   InlineJavascriptRequirement: {}
   EnvVarRequirement:
     envDef:
-      STAGEOUT_AWS_ACCESS_KEY_ID: $( inputs.STAGEOUT_AWS_ACCESS_KEY_ID )
-      STAGEOUT_AWS_SECRET_ACCESS_KEY: $( inputs.STAGEOUT_AWS_SECRET_ACCESS_KEY )
-      STAGEOUT_AWS_REGION: $( inputs.STAGEOUT_AWS_REGION )
-      STAGEOUT_AWS_SERVICEURL: $( inputs.STAGEOUT_AWS_SERVICEURL )
-
+      AWS_ACCESS_KEY_ID: $( inputs.STAGEOUT_AWS_ACCESS_KEY_ID )
+      AWS_SECRET_ACCESS_KEY: $( inputs.STAGEOUT_AWS_SECRET_ACCESS_KEY )
+      AWS_REGION: $( inputs.STAGEOUT_AWS_REGION )
+      AWS_S3_ENDPOINT: $( inputs.STAGEOUT_AWS_SERVICEURL )
   ResourceRequirement: {}
   InitialWorkDirRequirement:
     listing:
@@ -51,4 +51,93 @@ requirements:
         entry: |-
           import os
           import sys
-          sys.exit(0)
+          import pystac
+          import botocore
+          import boto3
+          import shutil
+          from pystac.stac_io import DefaultStacIO, StacIO
+          from urllib.parse import urlparse
+
+          cat_url = sys.argv[1]
+          bucket = sys.argv[2]
+          subfolder = sys.argv[3]
+
+          print(f"cat_url: {cat_url}", file=sys.stderr)
+          print(f"bucket: {bucket}", file=sys.stderr)
+          print(f"subfolder: {subfolder}", file=sys.stderr)
+
+          aws_access_key_id = os.environ["AWS_ACCESS_KEY_ID"]
+          aws_secret_access_key = os.environ["AWS_SECRET_ACCESS_KEY"]
+          region_name = os.environ["AWS_REGION"]
+          endpoint_url = os.environ["AWS_S3_ENDPOINT"]
+
+          shutil.copytree(cat_url, "/tmp/catalog")
+          cat = pystac.read_file(os.path.join("/tmp/catalog", "catalog.json"))
+
+          class CustomStacIO(DefaultStacIO):
+              """Custom STAC IO class that uses boto3 to read from S3."""
+
+              def __init__(self):
+                  self.session = botocore.session.Session()
+                  self.s3_client = self.session.create_client(
+                      service_name="s3",
+                      use_ssl=True,
+                      aws_access_key_id=aws_access_key_id,
+                      aws_secret_access_key=aws_secret_access_key,
+                      endpoint_url=endpoint_url,
+                      region_name=region_name,
+                  )
+
+              def write_text(self, dest, txt, *args, **kwargs):
+                  parsed = urlparse(dest)
+                  if parsed.scheme == "s3":
+                      self.s3_client.put_object(
+                          Body=txt.encode("UTF-8"),
+                          Bucket=parsed.netloc,
+                          Key=parsed.path[1:],
+                          ContentType="application/geo+json",
+                      )
+                  else:
+                      super().write_text(dest, txt, *args, **kwargs)
+
+
+          client = boto3.client(
+              "s3",
+              aws_access_key_id=aws_access_key_id,
+              aws_secret_access_key=aws_secret_access_key,
+              endpoint_url=endpoint_url,
+              region_name=region_name,
+          )
+
+          StacIO.set_default(CustomStacIO)
+
+          for index, link in enumerate(cat.links):
+            if link.rel == "root":
+                cat.links.pop(index) # remove root link
+
+          for item in cat.get_items():
+              for key, asset in item.get_assets().items():
+                  s3_path = os.path.normpath(
+                      os.path.join(os.path.join(subfolder, item.id, asset.href))
+                  )
+                  print(f"upload {asset.href} to s3://{bucket}/{s3_path}",file=sys.stderr)
+                  client.upload_file(
+                      asset.get_absolute_href(),
+                      bucket,
+                      s3_path,
+                  )
+                  asset.href = f"s3://{bucket}/{s3_path}"
+                  item.add_asset(key, asset)
+
+          cat.normalize_hrefs(f"s3://{bucket}/{subfolder}")
+
+          for item in cat.get_items():
+              # upload item to S3
+              print(f"upload {item.id} to s3://{bucket}/{subfolder}", file=sys.stderr)
+              pystac.write_file(item, item.get_self_href())
+
+          # upload catalog to S3
+          print(f"upload catalog.json to s3://{bucket}/{subfolder}", file=sys.stderr)
+          pystac.write_file(cat, cat.get_self_href())
+
+          print(f"s3://{bucket}/{subfolder}/catalog.json", file=sys.stdout)

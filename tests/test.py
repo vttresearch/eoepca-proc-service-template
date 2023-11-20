@@ -7,8 +7,9 @@ from cookiecutter.main import cookiecutter
 class TestExecutionHandler(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+
         cls.conf = {}
-        cls.conf["auth_env"] = {"jwt": f"{os.path.dirname(__file__)}/dummy.jwt"}
+        cls.conf["auth_env"] = {"jwt": "aspakfhskhfalkfalkfnalksnfalknsflakn"}
         cls.conf["lenv"] = {"message": ""}
         cls.conf["lenv"] = {
             "Identifier": "water-bodies",
@@ -21,15 +22,15 @@ class TestExecutionHandler(unittest.TestCase):
         }
 
         cls.conf["additional_parameters"] = {
-            "STAGEOUT_AWS_ACCESS_KEY_ID": os.getenv("AWS_SERVICE_URL", "minio-admin"),
+            "STAGEOUT_AWS_ACCESS_KEY_ID": os.getenv("AWS_SECRET_ACCESS_KEY",  "minio-admin"),
             "STAGEOUT_AWS_SECRET_ACCESS_KEY": os.getenv(
                 "AWS_REGION", "minio-secret-password"
             ),
             "STAGEOUT_AWS_REGION": os.getenv("AWS_ACCESS_KEY_ID", "RegionOne"),
             "STAGEOUT_AWS_SERVICEURL": os.getenv(
-                "AWS_SECRET_ACCESS_KEY", "http://s3-service.zoo.svc.cluster.local:9000"
+                "AWS_SERVICE_URL", "http://s3-service.zoo.svc.cluster.local:9000"
             ),
-            "STAGEOUT_OUTPUT": "s3://processingresults",
+            "STAGEOUT_OUTPUT": "processingresults",
             "process": "water-bodies-run",
         }
 
