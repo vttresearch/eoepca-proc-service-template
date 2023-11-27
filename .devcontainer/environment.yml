@@ -22,3 +22,6 @@ dependencies:
     - cookiecutter
     - boto3
     - botocore
+    - pystac
+    - python-dotenv
+    - jwt

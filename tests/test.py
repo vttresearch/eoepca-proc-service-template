@@ -1,15 +1,62 @@
 import os
 import unittest
 
+import requests
 from cookiecutter.main import cookiecutter
+from dotenv import load_dotenv
+from loguru import logger
+
+load_dotenv()
 
 
 class TestExecutionHandler(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        # UMA
+        # Client (e.g. Portal) authenticates user and calls the ADES
+        client_id = os.getenv("CLIENT_ID")  # "e2ca0359-c961-496d-8365-bdaa409b16f3"
+        client_secret = os.getenv(
+            "CLIENT_SECRET"
+        )  # "9c865400-d976-45db-9929-bba26ba64af1"
+
+        # Get Token Endpoint from OIDC Configuration
+        # Get OIDC Configuration
+        oidc_config_endpoint = os.getenv(
+            "OIDC_ENDPOINT"
+        )  # "https://{auth_server}/.well-known/openid-configuration"
+
+        headers = {"accept": "application/json"}
+        oidc_config = requests.get(oidc_config_endpoint, headers=headers).json()
+
+        # Extract the token endpoint
+        token_endpoint = oidc_config["token_endpoint"]
+        logger.info(f"Token Endpoint: {token_endpoint}")
+        # Get Tokens for User eric
+
+        username = os.getenv("USER_NAME")  # "eric"
+        password = os.getenv("PASSWORD")  # "defaultPWD"
+
+        logger.info(f"User: {username}")
+        logger.info(f"Password: {password}")
+
+        headers = {"cache-control": "no-cache"}
+        data = {
+            "scope": "openid user_name is_operator",
+            "grant_type": "password",
+            "username": username,
+            "password": password,
+            "client_id": client_id,
+            "client_secret": client_secret,
+        }
+        token_response = requests.post(
+            token_endpoint, headers=headers, data=data
+        ).json()
+        id_token = token_response["id_token"]
+        token_response["access_token"]
+        token_response["refresh_token"]
 
         cls.conf = {}
-        cls.conf["auth_env"] = {"jwt": "aspakfhskhfalkfalkfnalksnfalknsflakn"}
+        cls.conf["auth_env"] = {"jwt": id_token}
         cls.conf["lenv"] = {"message": ""}
         cls.conf["lenv"] = {
             "Identifier": "water-bodies",
@@ -22,7 +69,9 @@ class TestExecutionHandler(unittest.TestCase):
         }
 
         cls.conf["additional_parameters"] = {
-            "STAGEOUT_AWS_ACCESS_KEY_ID": os.getenv("AWS_SECRET_ACCESS_KEY",  "minio-admin"),
+            "STAGEOUT_AWS_ACCESS_KEY_ID": os.getenv(
+                "AWS_SECRET_ACCESS_KEY", "minio-admin"
+            ),
             "STAGEOUT_AWS_SECRET_ACCESS_KEY": os.getenv(
                 "AWS_REGION", "minio-secret-password"
             ),

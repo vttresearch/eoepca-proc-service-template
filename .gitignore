@@ -18,3 +18,4 @@ params.yaml
 temp*
 runs
 *.ipynb
+.env

@@ -1,4 +1,3 @@
-
 import os
 import re
 
@@ -8,22 +7,21 @@ class S3Settings:
     and setting environment variables for an S3 service"""
 
     def __init__(self):
-
         self.settings = {
-                            "S3": {
-                                "Services": {
-                                    "minio": {
-                                        "UrlPattern": "s3:\/\/processingresults\/.*",
-                                        "Region": "RegionOne",
-                                        "AuthenticationRegion": "RegionOne",
-                                        "AccessKey": "minio-admin",
-                                        "SecretKey": "minio-secret-password",
-                                        "ServiceURL": "http://localhost:9000",
-                                        #"ForcePathStyle": "true"
-                                    }
-                                }
-                            }
-                        }
+            "S3": {
+                "Services": {
+                    "minio": {
+                        "UrlPattern": "s3:\/\/processingresults\/.*",
+                        "Region": "RegionOne",
+                        "AuthenticationRegion": "RegionOne",
+                        "AccessKey": "minio-admin",
+                        "SecretKey": "minio-secret-password",
+                        "ServiceURL": "http://localhost:9000",
+                        # "ForcePathStyle": "true"
+                    }
+                }
+            }
+        }
 
     @staticmethod
     def match_regex(regex, string):
