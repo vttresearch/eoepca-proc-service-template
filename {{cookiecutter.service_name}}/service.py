@@ -80,20 +80,18 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         super().__init__()
         self.conf = conf
         self.domain = "demo.eoepca.org"
+        self.workspace_prefix = "demo-user"
         self.ades_rx_token = self.conf["auth_env"]["jwt"]
-        # TODO decode the JWT token to get the user name
-        # username = jwt.decode(self.ades_rx_token, verify=False, algorithms=["RS256"])["preferred_username"]
-        # logger.info(f"username {username}")        
-        self.user_name = "eric"
 
     def pre_execution_hook(self):
-        # TODO parse the JWT token to get the user name
-        # eric_name = "eric"
-        # domain = "demo.eoepca.org"
+
+        # decode the JWT token to get the user name
+        decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
 
         # Workspace API endpoint
-        uri_for_request = f"/workspaces/demo-user-{self.user_name}"
-        workspace_api_endpoint = f"https://workspace-api.{self.domain}{uri_for_request}"
+        uri_for_request = f"workspaces/{self.workspace_prefix}-{decoded['user_name']}"
+
+        workspace_api_endpoint = os.path.join(f"https://workspace-api.{self.domain}", uri_for_request)
 
         # Request: Get Workspace Details
         headers = {
@@ -103,8 +101,6 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         workspace_response = requests.get(
             workspace_api_endpoint, headers=headers
         ).json()
-
-        logger.debug(workspace_response)
 
         logger.info("Set user bucket settings")
         self.conf["additional_parameters"][
@@ -128,14 +124,16 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         )
 
         logger.info("Pre execution hook")
-        logger.info(self.conf["auth_env"])
 
     def post_execution_hook(self, log, output, usage_report, tool_logs):
         
         logger.info("Post execution hook")
         
+        # decode the JWT token to get the user name
+        decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
+        
         # Workspace API endpoint
-        uri_for_request = f"/workspaces/demo-user-{self.user_name}"
+        uri_for_request = f"/workspaces/{self.workspace_prefix}-{decoded['user_name']}"
         workspace_api_endpoint = f"https://workspace-api.{self.domain}{uri_for_request}"
 
         # Request: Get Workspace Details
@@ -146,8 +144,6 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         workspace_response = requests.get(
             workspace_api_endpoint, headers=headers
         ).json()
-
-        logger.debug(workspace_response)
 
         logger.info("Set user bucket settings")
         os.environ["AWS_S3_ENDPOINT"] = workspace_response["storage"]["credentials"][
