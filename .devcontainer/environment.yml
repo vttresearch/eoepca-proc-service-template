@@ -4,7 +4,7 @@ channels:
   - conda-forge
   - eoepca
 dependencies:
-  - python
+  - python==3.10
   - black
   - pre-commit
   - isort
@@ -24,4 +24,4 @@ dependencies:
     - botocore
     - pystac
     - python-dotenv
-    - jwt
+    - pyjwt

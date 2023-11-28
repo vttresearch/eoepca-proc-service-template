@@ -25,22 +25,17 @@ from urllib.parse import urlparse
 
 import boto3  # noqa: F401
 import botocore
-# import base64
-# import importlib
 import jwt
 import requests
 import yaml
-# import subprocess
 from botocore.exceptions import ClientError
 from loguru import logger
 from pystac import Asset, Collection, read_file
 from pystac.stac_io import DefaultStacIO, StacIO
-# import re
-from s3 import S3Settings
 from zoo_calrissian_runner import ExecutionHandler, ZooCalrissianRunner
-
-# from stac import CustomStacIO
-
+from botocore.client import Config
+logger.remove()
+logger.add(sys.stderr, level="INFO")    
 
 class CustomStacIO(DefaultStacIO):
     """Custom STAC IO class that uses boto3 to read from S3."""
@@ -50,12 +45,8 @@ class CustomStacIO(DefaultStacIO):
 
     def read_text(self, source, *args, **kwargs):
         parsed = urlparse(source)
-        logger.info(f"parsed {parsed}")
         if parsed.scheme == "s3":
-            # read the user settings file from the environment variable
-            s3_settings = S3Settings()
-            s3_settings.set_s3_environment(source)
-
+            
             s3_client = self.session.create_client(
                 service_name="s3",
                 region_name=os.environ.get("AWS_REGION"),
@@ -63,18 +54,15 @@ class CustomStacIO(DefaultStacIO):
                 endpoint_url=os.environ.get("AWS_S3_ENDPOINT"),
                 aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
                 aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-                verify=False,
+                verify=True,
+                config=Config(s3={'addressing_style': 'path', 'signature_version': 's3v4'})
+
             )
 
             bucket = parsed.netloc
             key = parsed.path[1:]
-            logger.info(f"bucket {bucket}")
-            logger.info(f"key {key}")
             try:
-                logger.info(f"content")
-                content = s3_client.get_object(Bucket=bucket, Key=key)["Body"].read()
-                logger.info(f"content {content}")
-                return content.read().decode("utf-8")
+                return s3_client.get_object(Bucket=bucket, Key=key)["Body"].read().decode("utf-8")
             except ClientError as ex:
                 if ex.response["Error"]["Code"] == "NoSuchKey":
                     logger.error(f"Error reading {source}: {ex}")
@@ -91,11 +79,12 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
     def __init__(self, conf):
         super().__init__()
         self.conf = conf
-        self.user_name = "eric"
         self.domain = "demo.eoepca.org"
         self.ades_rx_token = self.conf["auth_env"]["jwt"]
-        logger.info(self.ades_rx_token)
-        logger.info("EoepcaCalrissianRunnerExecutionHandler")
+        # TODO decode the JWT token to get the user name
+        # username = jwt.decode(self.ades_rx_token, verify=False, algorithms=["RS256"])["preferred_username"]
+        # logger.info(f"username {username}")        
+        self.user_name = "eric"
 
     def pre_execution_hook(self):
         # TODO parse the JWT token to get the user name
@@ -121,6 +110,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         self.conf["additional_parameters"][
             "STAGEOUT_AWS_SERVICEURL"
         ] = workspace_response["storage"]["credentials"]["endpoint"]
+        
         self.conf["additional_parameters"][
             "STAGEOUT_AWS_ACCESS_KEY_ID"
         ] = workspace_response["storage"]["credentials"]["access"]
@@ -134,17 +124,16 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             "storage"
         ]["credentials"]["bucketname"]
         self.conf["additional_parameters"]["process"] = os.path.join(
-            "processing-results", "an-id"
+            "processing-results", self.conf["lenv"]["usid"]
         )
 
         logger.info("Pre execution hook")
         logger.info(self.conf["auth_env"])
 
     def post_execution_hook(self, log, output, usage_report, tool_logs):
-        logger.info(output)
-
-        logger.info(self.conf["auth_env"])
-
+        
+        logger.info("Post execution hook")
+        
         # Workspace API endpoint
         uri_for_request = f"/workspaces/demo-user-{self.user_name}"
         workspace_api_endpoint = f"https://workspace-api.{self.domain}{uri_for_request}"
@@ -181,11 +170,10 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info(StacIO.default())
         try:
             cat = read_file(output["StacCatalogUri"])
-            cat.describe()
+            logger.info(cat.describe())
         except Exception as e:
             logger.info(f"Exception: {e}")
-        logger.info(os.environ["AWS_S3_ENDPOINT"])
-        logger.info("Post execution hook")
+        
 
     @staticmethod
     def local_get_file(fileName):

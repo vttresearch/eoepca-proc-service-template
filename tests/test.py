@@ -14,17 +14,17 @@ class TestExecutionHandler(unittest.TestCase):
     def setUpClass(cls):
         # UMA
         # Client (e.g. Portal) authenticates user and calls the ADES
-        client_id = os.getenv("CLIENT_ID")  # "e2ca0359-c961-496d-8365-bdaa409b16f3"
+        client_id = os.getenv("CLIENT_ID") 
         client_secret = os.getenv(
             "CLIENT_SECRET"
-        )  # "9c865400-d976-45db-9929-bba26ba64af1"
+        )
 
         # Get Token Endpoint from OIDC Configuration
         # Get OIDC Configuration
         oidc_config_endpoint = os.getenv(
             "OIDC_ENDPOINT"
-        )  # "https://{auth_server}/.well-known/openid-configuration"
-
+        )
+        
         headers = {"accept": "application/json"}
         oidc_config = requests.get(oidc_config_endpoint, headers=headers).json()
 
@@ -51,6 +51,7 @@ class TestExecutionHandler(unittest.TestCase):
         token_response = requests.post(
             token_endpoint, headers=headers, data=data
         ).json()
+
         id_token = token_response["id_token"]
         token_response["access_token"]
         token_response["refresh_token"]
@@ -60,7 +61,7 @@ class TestExecutionHandler(unittest.TestCase):
         cls.conf["lenv"] = {"message": ""}
         cls.conf["lenv"] = {
             "Identifier": "water-bodies",
-            "usid": "-dummy-uid-",
+            "usid": "dummy-uid",
         }
         cls.conf["tmpPath"] = "/tmp"
         cls.conf["main"] = {
