@@ -48,11 +48,11 @@ class CustomStacIO(DefaultStacIO):
         self.s3_client = self.session.create_client(
             service_name="s3",
             region_name=os.environ.get("AWS_REGION"),
-            use_ssl=True,
             endpoint_url=os.environ.get("AWS_S3_ENDPOINT"),
             aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
             aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
             verify=True,
+            use_ssl=True,
             config=Config(s3={"addressing_style": "path", "signature_version": "s3v4"}),
         )
 
@@ -178,32 +178,20 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             f"Register collection in workspace {self.workspace_prefix}-{decoded['user_name']}"
         )
         collection = next(cat.get_all_collections())
-        # r = requests.post(
-        #     f"{api_endpoint}/register-collection",
-        #     json=collection.to_dict(),
-        #     headers=headers,
-        # )
 
-        # logger.info(f"Register collection response: {r.status_code}")
-
-        # logger.info(f"Register collection")
-
+        logger.info(f"Register collection in the catalog")
         r = requests.post(
             f"{api_endpoint}/register-json",
             json=collection.to_dict(),
             headers=headers,
         )
-
         logger.info(f"Register collection response: {r.status_code}")
 
-        logger.info(f"Register items")
-        for item in collection.get_all_items():
-            r = requests.post(
-                f"{api_endpoint}/register-json",
-                json=item.to_dict(),
-                headers=headers,
-            )
-            logger.info(f"Register item response: {r.status_code}")
+        logger.info(f"Register the collection and associated items to the catalog and to the harvester")
+        r = requests.post(f"{api_endpoint}/register",
+                        data={"type": "stac-item", "url": collection.get_self_href()},
+                        headers=headers,)
+        logger.info(f"Register collection response: {r.status_code}")
 
         self.feature_collection = requests.get(
             f"{api_endpoint}/collections/{collection.id}", headers=headers

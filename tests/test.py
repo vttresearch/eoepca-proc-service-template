@@ -52,7 +52,7 @@ class TestExecutionHandler(unittest.TestCase):
         cls.conf["lenv"] = {"message": ""}
         cls.conf["lenv"] = {
             "Identifier": "water-bodies",
-            "usid": "cool-collection",
+            "usid": "cool-collection-2",
         }
         cls.conf["tmpPath"] = "/tmp"
         cls.conf["main"] = {
