@@ -30,14 +30,8 @@ class TestExecutionHandler(unittest.TestCase):
 
         # Extract the token endpoint
         token_endpoint = oidc_config["token_endpoint"]
-        logger.info(f"Token Endpoint: {token_endpoint}")
-        # Get Tokens for User eric
-
-        username = os.getenv("USER_NAME")  # "eric"
-        password = os.getenv("PASSWORD")  # "defaultPWD"
-
-        logger.info(f"User: {username}")
-        logger.info(f"Password: {password}")
+        username = os.getenv("USER_NAME")
+        password = os.getenv("PASSWORD") 
 
         headers = {"cache-control": "no-cache"}
         data = {
@@ -69,21 +63,7 @@ class TestExecutionHandler(unittest.TestCase):
             "tmpUrl": "http://localhost:8080",
         }
 
-        cls.conf["additional_parameters"] = {
-            "STAGEOUT_AWS_ACCESS_KEY_ID": os.getenv(
-                "AWS_SECRET_ACCESS_KEY", "minio-admin"
-            ),
-            "STAGEOUT_AWS_SECRET_ACCESS_KEY": os.getenv(
-                "AWS_REGION", "minio-secret-password"
-            ),
-            "STAGEOUT_AWS_REGION": os.getenv("AWS_ACCESS_KEY_ID", "RegionOne"),
-            "STAGEOUT_AWS_SERVICEURL": os.getenv(
-                "AWS_SERVICE_URL", "http://s3-service.zoo.svc.cluster.local:9000"
-            ),
-            "STAGEOUT_OUTPUT": "processingresults",
-            "process": "water-bodies-run",
-        }
-
+        cls.conf["additional_parameters"] = {}
         cls.service_name = "water_bodies"
         cls.workflow_id = "water-bodies"
 
@@ -114,10 +94,7 @@ class TestExecutionHandler(unittest.TestCase):
             output_dir=service_tmp_folder,
             no_input=True,
             overwrite_if_exists=True,
-            # config_file=self.cookiecutter_configuration_file
         )
-
-        # noqa
 
         cls.inputs = {
             "aoi": {"value": "-121.399,39.834,-120.74,40.472"},

@@ -57,6 +57,7 @@ requirements:
           import shutil
           from pystac.stac_io import DefaultStacIO, StacIO
           from urllib.parse import urlparse
+          from datetime import datetime
 
           cat_url = sys.argv[1]
           bucket = sys.argv[2]
@@ -111,11 +112,37 @@ requirements:
 
           StacIO.set_default(CustomStacIO)
 
+          # create a STAC collection for the process
+          date = datetime.now().strftime("%Y-%m-%d")
+
+          dates = [datetime.strptime(
+              f"{date}T00:00:00", "%Y-%m-%dT%H:%M:%S"
+          ), datetime.strptime(f"{date}T23:59:59", "%Y-%m-%dT%H:%M:%S")]
+
+          collection = pystac.Collection(
+            id="identifier",
+            description="description",
+            extent=pystac.Extent(
+              spatial=pystac.SpatialExtent([[-180, -90, 180, 90]]), 
+              temporal=pystac.TemporalExtent(intervals=[[min(dates), max(dates)]])
+            ),
+            title="Processing results",
+            href=f"s3://{bucket}/{subfolder}/collection.json",
+            stac_extensions=[],
+            keywords=["eoepca"],
+            license="proprietary",
+          )
+
           for index, link in enumerate(cat.links):
             if link.rel == "root":
                 cat.links.pop(index) # remove root link
 
           for item in cat.get_items():
+
+              item.set_collection(collection)
+              
+              collection.add_item(item)
+              
               for key, asset in item.get_assets().items():
                   s3_path = os.path.normpath(
                       os.path.join(os.path.join(subfolder, item.id, asset.href))
@@ -129,12 +156,22 @@ requirements:
                   asset.href = f"s3://{bucket}/{s3_path}"
                   item.add_asset(key, asset)
 
+          collection.update_extent_from_items() 
+
+          cat.clear_items()
+          
+          cat.add_child(collection)
+
           cat.normalize_hrefs(f"s3://{bucket}/{subfolder}")
 
-          for item in cat.get_items():
+          for item in collection.get_items():
               # upload item to S3
               print(f"upload {item.id} to s3://{bucket}/{subfolder}", file=sys.stderr)
               pystac.write_file(item, item.get_self_href())
+
+          # upload collection to S3
+          print(f"upload collection.json to s3://{bucket}/{subfolder}", file=sys.stderr)
+          pystac.write_file(collection, collection.get_self_href())
 
           # upload catalog to S3
           print(f"upload catalog.json to s3://{bucket}/{subfolder}", file=sys.stderr)

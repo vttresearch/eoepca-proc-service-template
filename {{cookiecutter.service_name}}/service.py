@@ -30,10 +30,14 @@ import requests
 import yaml
 from botocore.exceptions import ClientError
 from loguru import logger
-from pystac import Asset, Collection, read_file
+from pystac import Asset, Collection, read_file, write_file
 from pystac.stac_io import DefaultStacIO, StacIO
 from zoo_calrissian_runner import ExecutionHandler, ZooCalrissianRunner
 from botocore.client import Config
+from datetime import datetime
+from .stac import ResultCollection
+
+
 logger.remove()
 logger.add(sys.stderr, level="INFO")    
 
@@ -71,6 +75,30 @@ class CustomStacIO(DefaultStacIO):
         else:
             return super().read_text(source, *args, **kwargs)
 
+    def write_text(self, dest, txt, *args, **kwargs):
+        parsed = urlparse(dest)
+        
+        if parsed.scheme == "s3":
+            s3_client = self.session.create_client(
+                service_name="s3",
+                region_name=os.environ.get("AWS_REGION"),
+                use_ssl=True,
+                endpoint_url=os.environ.get("AWS_S3_ENDPOINT"),
+                aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+                verify=True,
+                config=Config(s3={'addressing_style': 'path', 'signature_version': 's3v4'})
+
+            )
+
+            s3_client.put_object(
+                Body=txt.encode("UTF-8"),
+                Bucket=parsed.netloc,
+                Key=parsed.path[1:],
+                ContentType="application/geo+json",
+            )
+        else:
+            super().write_text(dest, txt, *args, **kwargs)
 
 StacIO.set_default(CustomStacIO)
 
@@ -88,6 +116,8 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         # decode the JWT token to get the user name
         decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
 
+        logger.info("Pre execution hook")
+        
         # Workspace API endpoint
         uri_for_request = f"workspaces/{self.workspace_prefix}-{decoded['user_name']}"
 
@@ -122,8 +152,6 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         self.conf["additional_parameters"]["process"] = os.path.join(
             "processing-results", self.conf["lenv"]["usid"]
         )
-
-        logger.info("Pre execution hook")
 
     def post_execution_hook(self, log, output, usage_report, tool_logs):
         
@@ -170,6 +198,47 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         except Exception as e:
             logger.info(f"Exception: {e}")
         
+        
+        
+        #collection = ResultCollection(date=datetime.now().strftime("%Y-%m-%d")).init_collection()
+        #logger.info(collection.to_dict())
+        logger.info(f"Register collection in workspace {self.workspace_prefix}-{decoded['user_name']}")
+        collection = next(cat.get_all_collections())
+        r = requests.post(
+            f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}/register-collection",
+            json=collection.to_dict(),
+            headers={"Authorization": f"Bearer {self.ades_rx_token}"},
+        )
+
+        logger.info(f"Register collection response: {r}")
+        logger.info(f"Register collection response: {r.status_code}")
+        
+        logger.info(f"Register collection")
+        
+        r = requests.post(
+            f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}/register-json",
+            # data={"type": "stac-collection", "url": collection.get_self_href()},
+            json=collection.to_dict(),
+            headers={"Accept": "application/json", "Authorization": f"Bearer {self.ades_rx_token}"},
+        )
+        
+        logger.info(f"Register collection response: {r}")
+        
+        logger.info(f"Register items")
+        for item in collection.get_all_items():
+            r = requests.post(
+                f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}/register-json",
+                # data={"type": "stac-item", "url": item.get_self_href()},
+                json=item.to_dict(),
+                headers={"Accept": "application/json", "Authorization": f"Bearer {self.ades_rx_token}"},
+            )
+            logger.info(f"Register item response: {r}")
+        #for item in cat.get_all_items():
+        #    item.set_collection(collection)
+        #    write_file(item, item.get_self_href())
+            
+        
+
 
     @staticmethod
     def local_get_file(fileName):
