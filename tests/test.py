@@ -14,24 +14,20 @@ class TestExecutionHandler(unittest.TestCase):
     def setUpClass(cls):
         # UMA
         # Client (e.g. Portal) authenticates user and calls the ADES
-        client_id = os.getenv("CLIENT_ID") 
-        client_secret = os.getenv(
-            "CLIENT_SECRET"
-        )
+        client_id = os.getenv("CLIENT_ID")
+        client_secret = os.getenv("CLIENT_SECRET")
 
         # Get Token Endpoint from OIDC Configuration
         # Get OIDC Configuration
-        oidc_config_endpoint = os.getenv(
-            "OIDC_ENDPOINT"
-        )
-        
+        oidc_config_endpoint = os.getenv("OIDC_ENDPOINT")
+
         headers = {"accept": "application/json"}
         oidc_config = requests.get(oidc_config_endpoint, headers=headers).json()
 
         # Extract the token endpoint
         token_endpoint = oidc_config["token_endpoint"]
         username = os.getenv("USER_NAME")
-        password = os.getenv("PASSWORD") 
+        password = os.getenv("PASSWORD")
 
         headers = {"cache-control": "no-cache"}
         data = {
