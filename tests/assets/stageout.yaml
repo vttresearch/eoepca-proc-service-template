@@ -10,9 +10,11 @@ doc: "Stage-out the results to S3"
 #      - STAGEOUT_AWS_REGION
 #      - STAGEOUT_AWS_SERVICEURL
 inputs:
-  STAGEOUT_OUTPUT:
-    type: string
   process:
+    type: string
+  collection_id:
+    type: string
+  STAGEOUT_OUTPUT:
     type: string
   STAGEOUT_AWS_ACCESS_KEY_ID:
     type: string
@@ -34,6 +36,7 @@ arguments:
   - $( inputs.wf_outputs.path )
   - $( inputs.STAGEOUT_OUTPUT )
   - $( inputs.process )
+  - $( inputs.collection_id )
 requirements:
   DockerRequirement:
     dockerPull: ghcr.io/terradue/ogc-eo-application-package-hands-on/stage:1.3.2
@@ -62,6 +65,7 @@ requirements:
           cat_url = sys.argv[1]
           bucket = sys.argv[2]
           subfolder = sys.argv[3]
+          collection_id = sys.argv[4]
 
           print(f"cat_url: {cat_url}", file=sys.stderr)
           print(f"bucket: {bucket}", file=sys.stderr)
@@ -120,7 +124,7 @@ requirements:
           ), datetime.strptime(f"{date}T23:59:59", "%Y-%m-%dT%H:%M:%S")]
 
           collection = pystac.Collection(
-            id="identifier",
+            id=collection_id,
             description="description",
             extent=pystac.Extent(
               spatial=pystac.SpatialExtent([[-180, -90, 180, 90]]), 

@@ -2,6 +2,7 @@ import os
 import unittest
 
 import requests
+import pystac
 from cookiecutter.main import cookiecutter
 from dotenv import load_dotenv
 from loguru import logger
@@ -59,9 +60,12 @@ class TestExecutionHandler(unittest.TestCase):
             "tmpUrl": "http://localhost:8080",
         }
 
-        cls.conf["additional_parameters"] = {}
+        cls.conf["additional_parameters"] = {"collection_id": cls.conf["lenv"]["usid"]}
         cls.service_name = "water_bodies"
         cls.workflow_id = "water-bodies"
+
+        cls.base_domain = "demo.eoepca.org"
+        cls.workspace_prefix = "demo-user-eric"
 
         cookiecutter_values = {
             "service_name": cls.service_name,
@@ -110,3 +114,15 @@ class TestExecutionHandler(unittest.TestCase):
         from tests.water_bodies.service import water_bodies
 
         water_bodies(self.conf, self.inputs, self.outputs)
+
+        headers = {"accept": "application/json", "Authorization": f"Bearer {self.conf['auth_env']['jwt']}"}
+
+        workspace_endpoint = f'https://resource-catalogue.{self.workspace_prefix}.{self.base_domain}/collections/{self.conf["lenv"]["usid"]}/items'
+
+        r = requests.get(workspace_endpoint, headers=headers)
+
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["numberMatched"], 1)
+        self.assertIsInstance(pystac.read_dict(r.json()["features"][0]), pystac.Item)
+        
+        logger.info("Test passed")

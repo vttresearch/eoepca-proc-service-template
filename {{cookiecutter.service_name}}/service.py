@@ -30,12 +30,10 @@ import requests
 import yaml
 from botocore.exceptions import ClientError
 from loguru import logger
-from pystac import Asset, Collection, read_file, write_file
+from pystac import read_file
 from pystac.stac_io import DefaultStacIO, StacIO
 from zoo_calrissian_runner import ExecutionHandler, ZooCalrissianRunner
 from botocore.client import Config
-from datetime import datetime
-from .stac import ResultCollection
 
 
 logger.remove()
@@ -117,7 +115,8 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         self.domain = "demo.eoepca.org"
         self.workspace_prefix = "demo-user"
         self.ades_rx_token = self.conf["auth_env"]["jwt"]
-
+        self.feature_collection = None
+        
     def pre_execution_hook(self):
         # decode the JWT token to get the user name
         decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
@@ -246,9 +245,8 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
                 },
             )
             logger.info(f"Register item response: {r}")
-        # for item in cat.get_all_items():
-        #    item.set_collection(collection)
-        #    write_file(item, item.get_self_href())
+            
+        self.feature_collection = requests.get(f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}/collections/{collection.id}", headers=headers).json()
 
     @staticmethod
     def local_get_file(fileName):
@@ -363,11 +361,11 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
     exit_status = runner.execute()
 
     if exit_status == zoo.SERVICE_SUCCEEDED:
-        out = {
-            "StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]
-        }
-        json_out_string = json.dumps(out, indent=4)
-        outputs["stac"]["value"] = json_out_string
+        #out = {
+        #    "StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]
+        #}
+        #json_out_string = json.dumps(out, indent=4)
+        outputs["stac"]["value"] = execution_handler.feature_collection
         return zoo.SERVICE_SUCCEEDED
 
     else:
