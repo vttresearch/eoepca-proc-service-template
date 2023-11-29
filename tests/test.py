@@ -60,7 +60,7 @@ class TestExecutionHandler(unittest.TestCase):
             "tmpUrl": "http://localhost:8080",
         }
 
-        cls.conf["additional_parameters"] = {"collection_id": cls.conf["lenv"]["usid"]}
+        cls.conf["additional_parameters"] = {}
         cls.service_name = "water_bodies"
         cls.workflow_id = "water-bodies"
 

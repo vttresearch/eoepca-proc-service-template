@@ -45,57 +45,34 @@ class CustomStacIO(DefaultStacIO):
 
     def __init__(self):
         self.session = botocore.session.Session()
+        self.s3_client = self.session.create_client(
+            service_name="s3",
+            region_name=os.environ.get("AWS_REGION"),
+            use_ssl=True,
+            endpoint_url=os.environ.get("AWS_S3_ENDPOINT"),
+            aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
+            verify=True,
+            config=Config(s3={"addressing_style": "path", "signature_version": "s3v4"}),
+        )
 
     def read_text(self, source, *args, **kwargs):
         parsed = urlparse(source)
         if parsed.scheme == "s3":
-            s3_client = self.session.create_client(
-                service_name="s3",
-                region_name=os.environ.get("AWS_REGION"),
-                use_ssl=True,
-                endpoint_url=os.environ.get("AWS_S3_ENDPOINT"),
-                aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-                aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-                verify=True,
-                config=Config(
-                    s3={"addressing_style": "path", "signature_version": "s3v4"}
-                ),
+            return (
+                self.s3_client.get_object(Bucket=parsed.netloc, Key=parsed.path[1:])[
+                    "Body"
+                ]
+                .read()
+                .decode("utf-8")
             )
-
-            bucket = parsed.netloc
-            key = parsed.path[1:]
-            try:
-                return (
-                    s3_client.get_object(Bucket=bucket, Key=key)["Body"]
-                    .read()
-                    .decode("utf-8")
-                )
-            except ClientError as ex:
-                if ex.response["Error"]["Code"] == "NoSuchKey":
-                    logger.error(f"Error reading {source}: {ex}")
-                    sys.exit(1)
-
         else:
             return super().read_text(source, *args, **kwargs)
 
     def write_text(self, dest, txt, *args, **kwargs):
         parsed = urlparse(dest)
-
         if parsed.scheme == "s3":
-            s3_client = self.session.create_client(
-                service_name="s3",
-                region_name=os.environ.get("AWS_REGION"),
-                use_ssl=True,
-                endpoint_url=os.environ.get("AWS_S3_ENDPOINT"),
-                aws_access_key_id=os.environ.get("AWS_ACCESS_KEY_ID"),
-                aws_secret_access_key=os.environ.get("AWS_SECRET_ACCESS_KEY"),
-                verify=True,
-                config=Config(
-                    s3={"addressing_style": "path", "signature_version": "s3v4"}
-                ),
-            )
-
-            s3_client.put_object(
+            self.s3_client.put_object(
                 Body=txt.encode("UTF-8"),
                 Bucket=parsed.netloc,
                 Key=parsed.path[1:],
@@ -140,25 +117,18 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         ).json()
 
         logger.info("Set user bucket settings")
-        self.conf["additional_parameters"][
-            "STAGEOUT_AWS_SERVICEURL"
-        ] = workspace_response["storage"]["credentials"]["endpoint"]
 
-        self.conf["additional_parameters"][
-            "STAGEOUT_AWS_ACCESS_KEY_ID"
-        ] = workspace_response["storage"]["credentials"]["access"]
-        self.conf["additional_parameters"][
-            "STAGEOUT_AWS_SECRET_ACCESS_KEY"
-        ] = workspace_response["storage"]["credentials"]["secret"]
-        self.conf["additional_parameters"]["STAGEOUT_AWS_REGION"] = workspace_response[
-            "storage"
-        ]["credentials"]["region"]
-        self.conf["additional_parameters"]["STAGEOUT_OUTPUT"] = workspace_response[
-            "storage"
-        ]["credentials"]["bucketname"]
-        self.conf["additional_parameters"]["process"] = os.path.join(
-            "processing-results", self.conf["lenv"]["usid"]
-        )
+        storage_credentials = workspace_response["storage"]["credentials"]
+
+        self.conf["additional_parameters"] = {
+            "STAGEOUT_AWS_SERVICEURL": storage_credentials.get("endpoint"),
+            "STAGEOUT_AWS_ACCESS_KEY_ID": storage_credentials.get("access"),
+            "STAGEOUT_AWS_SECRET_ACCESS_KEY": storage_credentials.get("secret"),
+            "STAGEOUT_AWS_REGION": storage_credentials.get("region"),
+            "STAGEOUT_OUTPUT": storage_credentials.get("bucketname"),
+            "process": os.path.join("processing-results", self.conf["lenv"]["usid"]),
+            "collection_id": self.conf["lenv"]["usid"],
+        }
 
     def post_execution_hook(self, log, output, usage_report, tool_logs):
         logger.info("Post execution hook")
@@ -208,15 +178,15 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             f"Register collection in workspace {self.workspace_prefix}-{decoded['user_name']}"
         )
         collection = next(cat.get_all_collections())
-        r = requests.post(
-            f"{api_endpoint}/register-collection",
-            json=collection.to_dict(),
-            headers=headers,
-        )
+        # r = requests.post(
+        #     f"{api_endpoint}/register-collection",
+        #     json=collection.to_dict(),
+        #     headers=headers,
+        # )
 
-        logger.info(f"Register collection response: {r.status_code}")
+        # logger.info(f"Register collection response: {r.status_code}")
 
-        logger.info(f"Register collection")
+        # logger.info(f"Register collection")
 
         r = requests.post(
             f"{api_endpoint}/register-json",
@@ -224,17 +194,16 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             headers=headers,
         )
 
-        logger.info(f"Register collection response: {r}")
+        logger.info(f"Register collection response: {r.status_code}")
 
         logger.info(f"Register items")
         for item in collection.get_all_items():
             r = requests.post(
                 f"{api_endpoint}/register-json",
-                # data={"type": "stac-item", "url": item.get_self_href()},
                 json=item.to_dict(),
                 headers=headers,
             )
-            logger.info(f"Register item response: {r}")
+            logger.info(f"Register item response: {r.status_code}")
 
         self.feature_collection = requests.get(
             f"{api_endpoint}/collections/{collection.id}", headers=headers
