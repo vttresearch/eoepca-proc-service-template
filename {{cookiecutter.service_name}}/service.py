@@ -116,7 +116,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         self.workspace_prefix = "demo-user"
         self.ades_rx_token = self.conf["auth_env"]["jwt"]
         self.feature_collection = None
-        
+
     def pre_execution_hook(self):
         # decode the JWT token to get the user name
         decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
@@ -179,56 +179,49 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             workspace_api_endpoint, headers=headers
         ).json()
 
+        storage_credentials = workspace_response["storage"]["credentials"]
+
         logger.info("Set user bucket settings")
-        os.environ["AWS_S3_ENDPOINT"] = workspace_response["storage"]["credentials"][
-            "endpoint"
-        ]
-        os.environ["AWS_ACCESS_KEY_ID"] = workspace_response["storage"]["credentials"][
-            "access"
-        ]
-        os.environ["AWS_SECRET_ACCESS_KEY"] = workspace_response["storage"][
-            "credentials"
-        ]["secret"]
-        os.environ["AWS_REGION"] = workspace_response["storage"]["credentials"][
-            "region"
-        ]
+        os.environ["AWS_S3_ENDPOINT"] = storage_credentials.get("endpoint")
+        os.environ["AWS_ACCESS_KEY_ID"] = storage_credentials.get("access")
+        os.environ["AWS_SECRET_ACCESS_KEY"] = storage_credentials.get("secret")
+        os.environ["AWS_REGION"] = storage_credentials.get("region")
 
         StacIO.set_default(CustomStacIO)
 
         logger.info(f"STAC Catalog URI: {output['StacCatalogUri']}")
 
-        logger.info(StacIO.default())
         try:
             cat = read_file(output["StacCatalogUri"])
-            logger.info(cat.describe())
+            cat.describe()
         except Exception as e:
-            logger.info(f"Exception: {e}")
+            logger.error(f"Exception: {e}")
 
-        # collection = ResultCollection(date=datetime.now().strftime("%Y-%m-%d")).init_collection()
-        # logger.info(collection.to_dict())
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self.ades_rx_token}",
+        }
+
+        api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}"
+
         logger.info(
             f"Register collection in workspace {self.workspace_prefix}-{decoded['user_name']}"
         )
         collection = next(cat.get_all_collections())
         r = requests.post(
-            f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}/register-collection",
+            f"{api_endpoint}/register-collection",
             json=collection.to_dict(),
-            headers={"Authorization": f"Bearer {self.ades_rx_token}"},
+            headers=headers,
         )
 
-        logger.info(f"Register collection response: {r}")
         logger.info(f"Register collection response: {r.status_code}")
 
         logger.info(f"Register collection")
 
         r = requests.post(
-            f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}/register-json",
-            # data={"type": "stac-collection", "url": collection.get_self_href()},
+            f"{api_endpoint}/register-json",
             json=collection.to_dict(),
-            headers={
-                "Accept": "application/json",
-                "Authorization": f"Bearer {self.ades_rx_token}",
-            },
+            headers=headers,
         )
 
         logger.info(f"Register collection response: {r}")
@@ -236,17 +229,16 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info(f"Register items")
         for item in collection.get_all_items():
             r = requests.post(
-                f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}/register-json",
+                f"{api_endpoint}/register-json",
                 # data={"type": "stac-item", "url": item.get_self_href()},
                 json=item.to_dict(),
-                headers={
-                    "Accept": "application/json",
-                    "Authorization": f"Bearer {self.ades_rx_token}",
-                },
+                headers=headers,
             )
             logger.info(f"Register item response: {r}")
-            
-        self.feature_collection = requests.get(f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}/collections/{collection.id}", headers=headers).json()
+
+        self.feature_collection = requests.get(
+            f"{api_endpoint}/collections/{collection.id}", headers=headers
+        ).json()
 
     @staticmethod
     def local_get_file(fileName):
@@ -361,10 +353,10 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
     exit_status = runner.execute()
 
     if exit_status == zoo.SERVICE_SUCCEEDED:
-        #out = {
+        # out = {
         #    "StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]
-        #}
-        #json_out_string = json.dumps(out, indent=4)
+        # }
+        # json_out_string = json.dumps(out, indent=4)
         outputs["stac"]["value"] = execution_handler.feature_collection
         return zoo.SERVICE_SUCCEEDED
 

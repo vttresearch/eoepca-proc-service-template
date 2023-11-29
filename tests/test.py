@@ -52,7 +52,7 @@ class TestExecutionHandler(unittest.TestCase):
         cls.conf["lenv"] = {"message": ""}
         cls.conf["lenv"] = {
             "Identifier": "water-bodies",
-            "usid": "dummy-uid",
+            "usid": "cool-collection",
         }
         cls.conf["tmpPath"] = "/tmp"
         cls.conf["main"] = {
@@ -115,7 +115,10 @@ class TestExecutionHandler(unittest.TestCase):
 
         water_bodies(self.conf, self.inputs, self.outputs)
 
-        headers = {"accept": "application/json", "Authorization": f"Bearer {self.conf['auth_env']['jwt']}"}
+        headers = {
+            "accept": "application/json",
+            "Authorization": f"Bearer {self.conf['auth_env']['jwt']}",
+        }
 
         workspace_endpoint = f'https://resource-catalogue.{self.workspace_prefix}.{self.base_domain}/collections/{self.conf["lenv"]["usid"]}/items'
 
@@ -124,5 +127,5 @@ class TestExecutionHandler(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["numberMatched"], 1)
         self.assertIsInstance(pystac.read_dict(r.json()["features"][0]), pystac.Item)
-        
+
         logger.info("Test passed")
