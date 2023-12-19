@@ -101,7 +101,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info("Pre execution hook")
 
         # Workspace API endpoint
-        uri_for_request = f"workspaces/{self.workspace_prefix}-{decoded['user_name']}"
+        uri_for_request = f"workspaces/{self.workspace_prefix}-{decoded['username']}"
 
         workspace_api_endpoint = os.path.join(
             f"https://workspace-api.{self.domain}", uri_for_request
@@ -137,7 +137,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
 
         # Workspace API endpoint
-        uri_for_request = f"/workspaces/{self.workspace_prefix}-{decoded['user_name']}"
+        uri_for_request = f"/workspaces/{self.workspace_prefix}-{decoded['username']}"
         workspace_api_endpoint = f"https://workspace-api.{self.domain}{uri_for_request}"
 
         # Request: Get Workspace Details
@@ -172,10 +172,10 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             "Authorization": f"Bearer {self.ades_rx_token}",
         }
 
-        api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}"
+        api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['username']}"
 
         logger.info(
-            f"Register collection in workspace {self.workspace_prefix}-{decoded['user_name']}"
+            f"Register collection in workspace {self.workspace_prefix}-{decoded['username']}"
         )
         collection = next(cat.get_all_collections())
 
