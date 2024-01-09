@@ -189,13 +189,13 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
 
         logger.info(f"Register the collection and associated items to the catalog and to the harvester")
         r = requests.post(f"{api_endpoint}/register",
-                        data={"type": "stac-item", "url": collection.get_self_href()},
+                        json={"type": "stac-item", "url": collection.get_self_href()},
                         headers=headers,)
         logger.info(f"Register collection response: {r.status_code}")
-        logger.info(f"url {collection.get_self_href()}")
-        self.feature_collection = requests.get(
-            f"{api_endpoint}/collections/{collection.id}", headers=headers
-        ).json()
+
+        #self.feature_collection = requests.get(
+        #    f"{api_endpoint}/collections/{collection.id}", headers=headers
+        #).json()
 
     @staticmethod
     def local_get_file(fileName):
