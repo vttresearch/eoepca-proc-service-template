@@ -89,8 +89,8 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
     def __init__(self, conf):
         super().__init__()
         self.conf = conf
-        self.domain = "demo.eoepca.org"
-        self.workspace_prefix = "demo-user"
+        self.domain = self.conf["eoepca"]["domain"]
+        self.workspace_prefix = self.conf["eoepca"]["workspace_prefix"]
         self.ades_rx_token = self.conf["auth_env"]["jwt"]
         self.feature_collection = None
 
@@ -163,8 +163,6 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
 
         try:
             s3_path = output["StacCatalogUri"]
-            if s3_path.count("s3://")==0:
-                s3_path = "s3://" + s3_path
             cat = read_file( s3_path )
             cat.describe()
         except Exception as e:
