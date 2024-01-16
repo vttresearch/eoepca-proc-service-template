@@ -89,8 +89,8 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
     def __init__(self, conf):
         super().__init__()
         self.conf = conf
-        self.domain = "demo.eoepca.org"
-        self.workspace_prefix = "demo-user"
+        self.domain = self.conf["eoepca"]["domain"]
+        self.workspace_prefix = self.conf["eoepca"]["workspace_prefix"]
         self.ades_rx_token = self.conf["auth_env"]["jwt"]
         self.feature_collection = None
 
@@ -101,7 +101,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info("Pre execution hook")
 
         # Workspace API endpoint
-        uri_for_request = f"workspaces/{self.workspace_prefix}-{decoded['user_name']}"
+        uri_for_request = f"workspaces/{self.workspace_prefix}-{decoded['username']}"
 
         workspace_api_endpoint = os.path.join(
             f"https://workspace-api.{self.domain}", uri_for_request
@@ -137,7 +137,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
 
         # Workspace API endpoint
-        uri_for_request = f"/workspaces/{self.workspace_prefix}-{decoded['user_name']}"
+        uri_for_request = f"/workspaces/{self.workspace_prefix}-{decoded['username']}"
         workspace_api_endpoint = f"https://workspace-api.{self.domain}{uri_for_request}"
 
         # Request: Get Workspace Details
@@ -162,7 +162,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info(f"STAC Catalog URI: {output['StacCatalogUri']}")
 
         try:
-            cat = read_file(output["StacCatalogUri"])
+            cat = read_file( output["StacCatalogUri"] )
             cat.describe()
         except Exception as e:
             logger.error(f"Exception: {e}")
@@ -172,10 +172,10 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             "Authorization": f"Bearer {self.ades_rx_token}",
         }
 
-        api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['user_name']}"
+        api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['username']}"
 
         logger.info(
-            f"Register collection in workspace {self.workspace_prefix}-{decoded['user_name']}"
+            f"Register collection in workspace {self.workspace_prefix}-{decoded['username']}"
         )
         collection = next(cat.get_all_collections())
 
