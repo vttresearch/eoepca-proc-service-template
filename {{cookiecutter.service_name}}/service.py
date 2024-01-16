@@ -162,8 +162,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info(f"STAC Catalog URI: {output['StacCatalogUri']}")
 
         try:
-            s3_path = output["StacCatalogUri"]
-            cat = read_file( s3_path )
+            cat = read_file( output["StacCatalogUri"] )
             cat.describe()
         except Exception as e:
             logger.error(f"Exception: {e}")
