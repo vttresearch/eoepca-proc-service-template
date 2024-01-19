@@ -97,11 +97,12 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
     def pre_execution_hook(self):
         # decode the JWT token to get the user name
         decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
+        username = self.get_user_name(decoded)
 
         logger.info("Pre execution hook")
 
         # Workspace API endpoint
-        uri_for_request = f"workspaces/{self.workspace_prefix}-{decoded['username']}"
+        uri_for_request = f"workspaces/{self.workspace_prefix}-{username}"
 
         workspace_api_endpoint = os.path.join(
             f"https://workspace-api.{self.domain}", uri_for_request
@@ -135,9 +136,10 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
 
         # decode the JWT token to get the user name
         decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
+        username = self.get_user_name(decoded)
 
         # Workspace API endpoint
-        uri_for_request = f"/workspaces/{self.workspace_prefix}-{decoded['username']}"
+        uri_for_request = f"/workspaces/{self.workspace_prefix}-{username}"
         workspace_api_endpoint = f"https://workspace-api.{self.domain}{uri_for_request}"
 
         # Request: Get Workspace Details
@@ -172,10 +174,10 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             "Authorization": f"Bearer {self.ades_rx_token}",
         }
 
-        api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['username']}"
+        api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{username}"
 
         logger.info(
-            f"Register collection in workspace {self.workspace_prefix}-{decoded['username']}"
+            f"Register collection in workspace {self.workspace_prefix}-{username}"
         )
         collection = next(cat.get_all_collections())
 
@@ -197,6 +199,13 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
                         json={"type": "stac-item", "url": collection.get_self_href()},
                         headers=headers,)
         logger.info(f"Register collection response: {r.status_code}")
+
+    @staticmethod
+    def get_user_name(decodedJwt) -> str:
+        for key in ["username", "user_name"]:
+            if key in decodedJwt:
+                return decodedJwt[key]
+        return ""
 
     @staticmethod
     def local_get_file(fileName):
