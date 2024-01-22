@@ -165,7 +165,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
 
         try:
             cat = read_file( output["StacCatalogUri"] )
-            cat.describe()
+            # cat.describe()
         except Exception as e:
             logger.error(f"Exception: {e}")
 
