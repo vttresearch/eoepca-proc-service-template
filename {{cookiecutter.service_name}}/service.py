@@ -34,6 +34,7 @@ from pystac import read_file
 from pystac.stac_io import DefaultStacIO, StacIO
 from zoo_calrissian_runner import ExecutionHandler, ZooCalrissianRunner
 from botocore.client import Config
+from pystac.item_collection import ItemCollection
 
 
 logger.remove()
@@ -164,8 +165,12 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info(f"STAC Catalog URI: {output['StacCatalogUri']}")
 
         try:
-            cat = read_file( output["StacCatalogUri"] )
-            # cat.describe()
+            s3_path = output["StacCatalogUri"]
+            if s3_path.count("s3://")==0:
+                s3_path = "s3://" + s3_path
+            cat = read_file( s3_path )
+            # Avoid printing on sys.stdout
+            #cat.describe()
         except Exception as e:
             logger.error(f"Exception: {e}")
 
@@ -179,12 +184,33 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info(
             f"Register collection in workspace {self.workspace_prefix}-{username}"
         )
-        collection = next(cat.get_all_collections())
+        try:
+            collection = next(cat.get_all_collections())
+        except:
+            try:
+                items=cat.get_all_items()
+                itemFinal=[]
+                for i in items:
+                    for a in i.assets.keys():
+                        cDict=i.assets[a].to_dict()
+                        cDict["storage:platform"]="EOEPCA"
+                        cDict["storage:requester_pays"]=False
+                        cDict["storage:tier"]="Standard"
+                        cDict["storage:region"]=self.conf["additional_parameters"]["STAGEOUT_AWS_REGION"]
+                        cDict["storage:endpoint"]=self.conf["additional_parameters"]["STAGEOUT_AWS_SERVICEURL"]
+                        i.assets[a]=i.assets[a].from_dict(cDict)
+                    i.collection_id=self.conf["lenv"]["usid"]
+                    itemFinal+=[i.clone()]
+                collection = ItemCollection(items=itemFinal)
+            except Exception as e:
+                logger.error(f"Exception: {e}"+str(e))
 
         logger.info(f"Register collection in the catalog")
+        collection_dict=collection.to_dict()
+        collection_dict["id"]=self.conf["lenv"]["usid"]
         r = requests.post(
             f"{api_endpoint}/register-json",
-            json=collection.to_dict(),
+            json=collection_dict,
             headers=headers,
         )
         logger.info(f"Register collection response: {r.status_code}")
@@ -193,6 +219,9 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         #self.feature_collection = requests.get(
         #    f"{api_endpoint}/collections/{collection.id}", headers=headers
         #).json()
+
+        # Set the feature collection to be returned
+        self.feature_collection = str(collection_dict)
         
         logger.info(f"Register the collection and associated items to the catalog and to the harvester")
         r = requests.post(f"{api_endpoint}/register",
@@ -324,8 +353,7 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
         #    "StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]
         # }
         # json_out_string = json.dumps(out, indent=4)
-        # outputs["stac"]["value"] = execution_handler.feature_collection
-        outputs["stac"]["value"]=json.dumps({"StacCatalogUri": outputs['StacCatalogUri'] }, indent=4)
+        outputs["stac"]["value"] = execution_handler.feature_collection
         return zoo.SERVICE_SUCCEEDED
 
     else:
