@@ -324,7 +324,8 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
         #    "StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]
         # }
         # json_out_string = json.dumps(out, indent=4)
-        outputs["stac"]["value"] = execution_handler.feature_collection
+        # outputs["stac"]["value"] = execution_handler.feature_collection
+        outputs["stac"]["value"]=json.dumps({"StacCatalogUri": outputs['StacCatalogUri'] }, indent=4)
         return zoo.SERVICE_SUCCEEDED
 
     else:
