@@ -293,9 +293,9 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         # link element to add to the statusInfo
         servicesLogs = [
             {
-                "url": f"{self.conf['main']['tmpUrl']}/"
-                f"{self.conf['lenv']['Identifier']}-{self.conf['lenv']['usid']}/"
-                f"{os.path.basename(tool_log)}",
+                "url": os.path.join(self.conf['main']['tmpUrl'],
+                                    f"{self.conf['lenv']['Identifier']}-{self.conf['lenv']['usid']}",
+                                    os.path.basename(tool_log)),
                 "title": f"Tool log {os.path.basename(tool_log)}",
                 "rel": "related",
             }
