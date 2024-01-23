@@ -12,6 +12,7 @@ dependencies:
   - autoflake
   - pylint
   - nose2
+  - git
   - pip
   - loguru
   - pip:
