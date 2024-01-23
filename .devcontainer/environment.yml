@@ -12,12 +12,13 @@ dependencies:
   - autoflake
   - pylint
   - nose2
+  - git
   - pip
   - cwl-wrapper
   - pycalrissian
   - loguru
   - pip:
-    - https://github.com/EOEPCA/zoo-calrissian-runner/archive/feature/using-jobid-namespace.zip
+    - git+https://github.com/EOEPCA/zoo-calrissian-runner.git@feature/using-jobid-namespace
     - attrs
     - cwl-utils==0.14
     - kubernetes==28.1.0
