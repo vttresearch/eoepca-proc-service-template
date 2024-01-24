@@ -163,6 +163,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         StacIO.set_default(CustomStacIO)
 
         logger.info(f"STAC Catalog URI: {output['StacCatalogUri']}")
+        logger.info(f"zzz=> output[]: {json.dumps(output, indent=2)}")
 
         try:
             s3_path = output["StacCatalogUri"]
@@ -348,12 +349,15 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
 
     exit_status = runner.execute()
 
+    logger.info(f"zzz=> outputs[] BEFORE: {json.dumps(outputs, indent=2)}")
+
     if exit_status == zoo.SERVICE_SUCCEEDED:
         # out = {
         #    "StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]
         # }
         # json_out_string = json.dumps(out, indent=4)
         outputs["stac"]["value"] = execution_handler.feature_collection
+        logger.info(f"zzz=> outputs[] AFTER: {json.dumps(outputs, indent=2)}")
         return zoo.SERVICE_SUCCEEDED
 
     else:
