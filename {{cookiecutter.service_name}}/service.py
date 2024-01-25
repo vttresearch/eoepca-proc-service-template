@@ -166,12 +166,9 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
 
         # Force the output to use the key 'stac', which the ZooCalrissianRunner seems to expect
         logger.info(f"zzz=> output[] BEFORE: {json.dumps(output, indent=2)}")
-        for key in output.keys():
-            if key == "StacCatalogUri":
-                continue
-            if key ==  "stac":
-                break
-            output["stac"] = output.pop(key)
+        wfoutput_keys = [key for key in output.keys() if key not in ["StacCatalogUri", "stac"]]
+        if len(wfoutput_keys) > 0:
+            output["stac"] = output.pop(wfoutput_keys[0])
         logger.info(f"zzz=> output[] AFTER: {json.dumps(output, indent=2)}")
 
         try:
