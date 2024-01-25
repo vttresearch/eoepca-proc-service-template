@@ -365,7 +365,7 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
             if len(output_keys) > 0:
                 key_to_rename = output_keys[0]
                 logger.info(f"zzz=> Renaming KEY: {key_to_rename}")
-                outputs["stac"].extend(outputs.pop(key_to_rename))
+                outputs["stac"] += outputs.pop(key_to_rename)
         logger.info(f"zzz=> outputs[] AFTER_1: {json.dumps(outputs, indent=2)}")
 
         # out = {
