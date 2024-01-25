@@ -163,14 +163,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         StacIO.set_default(CustomStacIO)
 
         logger.info(f"STAC Catalog URI: {output['StacCatalogUri']}")
-
-        # Force the output to use the key 'stac', which the ZooCalrissianRunner seems to expect
-        logger.info(f"zzz=> output[] BEFORE: {json.dumps(output, indent=2)}")
-        wfoutput_keys = [key for key in output.keys() if key not in ["StacCatalogUri", "stac"]]
-        if len(wfoutput_keys) > 0:
-            # output["stac"] = output.pop(wfoutput_keys[0])
-            logger.info(f"zzz=> KEY that would have been renamed: {wfoutput_keys[0]}")
-        logger.info(f"zzz=> output[] AFTER: {json.dumps(output, indent=2)}")
+        logger.info(f"zzz=> output[]: {json.dumps(output, indent=2)}")
 
         try:
             s3_path = output["StacCatalogUri"]
@@ -364,7 +357,7 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
             output_keys = [key for key in outputs.keys() if key not in ["stac"]]
             if len(output_keys) > 0:
                 key_to_rename = output_keys[0]
-                logger.info(f"zzz=> Renaming KEY: {key_to_rename}")
+                logger.info(f"Renaming Workflow output key from '{key_to_rename}' to 'stac'")
                 outputs["stac"].update(outputs.pop(key_to_rename))
         logger.info(f"zzz=> outputs[] AFTER_1: {json.dumps(outputs, indent=2)}")
 
