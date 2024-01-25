@@ -163,7 +163,6 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         StacIO.set_default(CustomStacIO)
 
         logger.info(f"STAC Catalog URI: {output['StacCatalogUri']}")
-        logger.info(f"zzz=> output[]: {json.dumps(output, indent=2)}")
 
         try:
             s3_path = output["StacCatalogUri"]
@@ -349,24 +348,17 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
 
     exit_status = runner.execute()
 
-    logger.info(f"zzz=> outputs[] BEFORE: {json.dumps(outputs, indent=2)}")
-
     if exit_status == zoo.SERVICE_SUCCEEDED:
-
+        # Normalise the id of the workflow output, by renaming to 'stac' regardless of how
+        # it was named in the original Application Package.
         if "stac" in outputs:
             output_keys = [key for key in outputs.keys() if key not in ["stac"]]
             if len(output_keys) > 0:
                 key_to_rename = output_keys[0]
                 logger.info(f"Renaming Workflow output key from '{key_to_rename}' to 'stac'")
                 outputs["stac"].update(outputs.pop(key_to_rename))
-        logger.info(f"zzz=> outputs[] AFTER_1: {json.dumps(outputs, indent=2)}")
 
-        # out = {
-        #    "StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]
-        # }
-        # json_out_string = json.dumps(out, indent=4)
         outputs["stac"]["value"] = execution_handler.feature_collection
-        logger.info(f"zzz=> outputs[] AFTER_2: {json.dumps(outputs, indent=2)}")
         return zoo.SERVICE_SUCCEEDED
 
     else:
