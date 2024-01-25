@@ -359,12 +359,23 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
     logger.info(f"zzz=> outputs[] BEFORE: {json.dumps(outputs, indent=2)}")
 
     if exit_status == zoo.SERVICE_SUCCEEDED:
+
+        if "stac" in outputs:
+            output_keys = [key for key in outputs.keys() if key not in ["stac"]]
+            if len(output_keys) > 0:
+                rename_key = output_keys[0]
+                logger.info(f"zzz=> Renaming key: {rename_key}")
+                for key in outputs[rename_key].keys():
+                    outputs["stac"][key] = outputs[rename_key].pop(key)
+                outputs.pop(rename_key)
+        logger.info(f"zzz=> outputs[] AFTER_1: {json.dumps(outputs, indent=2)}")
+
         # out = {
         #    "StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]
         # }
         # json_out_string = json.dumps(out, indent=4)
         outputs["stac"]["value"] = execution_handler.feature_collection
-        logger.info(f"zzz=> outputs[] AFTER: {json.dumps(outputs, indent=2)}")
+        logger.info(f"zzz=> outputs[] AFTER_2: {json.dumps(outputs, indent=2)}")
         return zoo.SERVICE_SUCCEEDED
 
     else:
