@@ -168,7 +168,8 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info(f"zzz=> output[] BEFORE: {json.dumps(output, indent=2)}")
         wfoutput_keys = [key for key in output.keys() if key not in ["StacCatalogUri", "stac"]]
         if len(wfoutput_keys) > 0:
-            output["stac"] = output.pop(wfoutput_keys[0])
+            # output["stac"] = output.pop(wfoutput_keys[0])
+            logger.info(f"zzz=> KEY that would have been renamed: {wfoutput_keys[0]}")
         logger.info(f"zzz=> output[] AFTER: {json.dumps(output, indent=2)}")
 
         try:
