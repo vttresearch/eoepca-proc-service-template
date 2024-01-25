@@ -163,7 +163,16 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         StacIO.set_default(CustomStacIO)
 
         logger.info(f"STAC Catalog URI: {output['StacCatalogUri']}")
-        logger.info(f"zzz=> output[]: {json.dumps(output, indent=2)}")
+
+        # Force the output to use the key 'stac', which the ZooCalrissianRunner seems to expect
+        logger.info(f"zzz=> output[] BEFORE: {json.dumps(output, indent=2)}")
+        for key in output.keys():
+            if key == "StacCatalogUri":
+                continue
+            if key ==  "stac":
+                break
+            output["stac"] = output.pop(key)
+        logger.info(f"zzz=> output[] AFTER: {json.dumps(output, indent=2)}")
 
         try:
             s3_path = output["StacCatalogUri"]
