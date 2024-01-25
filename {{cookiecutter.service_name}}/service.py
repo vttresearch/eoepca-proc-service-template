@@ -363,11 +363,9 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
         if "stac" in outputs:
             output_keys = [key for key in outputs.keys() if key not in ["stac"]]
             if len(output_keys) > 0:
-                rename_key = output_keys[0]
-                logger.info(f"zzz=> Renaming key: {rename_key}")
-                for key in outputs[rename_key].keys():
-                    outputs["stac"][key] = outputs[rename_key].pop(key)
-                outputs.pop(rename_key)
+                key_to_rename = output_keys[0]
+                logger.info(f"zzz=> Renaming KEY: {key_to_rename}")
+                outputs["stac"].extend(outputs.pop(key_to_rename))
         logger.info(f"zzz=> outputs[] AFTER_1: {json.dumps(outputs, indent=2)}")
 
         # out = {
