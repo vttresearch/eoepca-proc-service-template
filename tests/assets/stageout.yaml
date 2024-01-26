@@ -149,7 +149,7 @@ requirements:
               
               for key, asset in item.get_assets().items():
                   s3_path = os.path.normpath(
-                      os.path.join(os.path.join(subfolder, item.id, asset.href))
+                      os.path.join(subfolder, collection_id, item.id, os.path.basename(asset.href))
                   )
                   print(f"upload {asset.href} to s3://{bucket}/{s3_path}",file=sys.stderr)
                   client.upload_file(

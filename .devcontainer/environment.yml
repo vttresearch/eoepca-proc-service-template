@@ -12,10 +12,13 @@ dependencies:
   - autoflake
   - pylint
   - nose2
-  - zoo-calrissian-runner
+  - git
   - pip
+  - cwl-wrapper
+  - pycalrissian
   - loguru
   - pip:
+    - git+https://github.com/EOEPCA/zoo-calrissian-runner.git@df52e54
     - attrs
     - cwl-utils==0.14
     - kubernetes==28.1.0

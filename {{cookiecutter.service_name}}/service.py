@@ -34,6 +34,7 @@ from pystac import read_file
 from pystac.stac_io import DefaultStacIO, StacIO
 from zoo_calrissian_runner import ExecutionHandler, ZooCalrissianRunner
 from botocore.client import Config
+from pystac.item_collection import ItemCollection
 
 
 logger.remove()
@@ -97,11 +98,12 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
     def pre_execution_hook(self):
         # decode the JWT token to get the user name
         decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
+        username = self.get_user_name(decoded)
 
         logger.info("Pre execution hook")
 
         # Workspace API endpoint
-        uri_for_request = f"workspaces/{self.workspace_prefix}-{decoded['username']}"
+        uri_for_request = f"workspaces/{self.workspace_prefix}-{username}"
 
         workspace_api_endpoint = os.path.join(
             f"https://workspace-api.{self.domain}", uri_for_request
@@ -135,9 +137,10 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
 
         # decode the JWT token to get the user name
         decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
+        username = self.get_user_name(decoded)
 
         # Workspace API endpoint
-        uri_for_request = f"/workspaces/{self.workspace_prefix}-{decoded['username']}"
+        uri_for_request = f"/workspaces/{self.workspace_prefix}-{username}"
         workspace_api_endpoint = f"https://workspace-api.{self.domain}{uri_for_request}"
 
         # Request: Get Workspace Details
@@ -162,8 +165,12 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info(f"STAC Catalog URI: {output['StacCatalogUri']}")
 
         try:
-            cat = read_file( output["StacCatalogUri"] )
-            cat.describe()
+            s3_path = output["StacCatalogUri"]
+            if s3_path.count("s3://")==0:
+                s3_path = "s3://" + s3_path
+            cat = read_file( s3_path )
+            # Avoid printing on sys.stdout
+            #cat.describe()
         except Exception as e:
             logger.error(f"Exception: {e}")
 
@@ -172,17 +179,38 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             "Authorization": f"Bearer {self.ades_rx_token}",
         }
 
-        api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{decoded['username']}"
+        api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{username}"
 
         logger.info(
-            f"Register collection in workspace {self.workspace_prefix}-{decoded['username']}"
+            f"Register collection in workspace {self.workspace_prefix}-{username}"
         )
-        collection = next(cat.get_all_collections())
+        try:
+            collection = next(cat.get_all_collections())
+        except:
+            try:
+                items=cat.get_all_items()
+                itemFinal=[]
+                for i in items:
+                    for a in i.assets.keys():
+                        cDict=i.assets[a].to_dict()
+                        cDict["storage:platform"]="EOEPCA"
+                        cDict["storage:requester_pays"]=False
+                        cDict["storage:tier"]="Standard"
+                        cDict["storage:region"]=self.conf["additional_parameters"]["STAGEOUT_AWS_REGION"]
+                        cDict["storage:endpoint"]=self.conf["additional_parameters"]["STAGEOUT_AWS_SERVICEURL"]
+                        i.assets[a]=i.assets[a].from_dict(cDict)
+                    i.collection_id=self.conf["lenv"]["usid"]
+                    itemFinal+=[i.clone()]
+                collection = ItemCollection(items=itemFinal)
+            except Exception as e:
+                logger.error(f"Exception: {e}"+str(e))
 
         logger.info(f"Register collection in the catalog")
+        collection_dict=collection.to_dict()
+        collection_dict["id"]=self.conf["lenv"]["usid"]
         r = requests.post(
             f"{api_endpoint}/register-json",
-            json=collection.to_dict(),
+            json=collection_dict,
             headers=headers,
         )
         logger.info(f"Register collection response: {r.status_code}")
@@ -191,12 +219,22 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         #self.feature_collection = requests.get(
         #    f"{api_endpoint}/collections/{collection.id}", headers=headers
         #).json()
+
+        # Set the feature collection to be returned
+        self.feature_collection = str(collection_dict)
         
         logger.info(f"Register the collection and associated items to the catalog and to the harvester")
         r = requests.post(f"{api_endpoint}/register",
                         json={"type": "stac-item", "url": collection.get_self_href()},
                         headers=headers,)
         logger.info(f"Register collection response: {r.status_code}")
+
+    @staticmethod
+    def get_user_name(decodedJwt) -> str:
+        for key in ["username", "user_name"]:
+            if key in decodedJwt:
+                return decodedJwt[key]
+        return ""
 
     @staticmethod
     def local_get_file(fileName):
@@ -255,9 +293,9 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         # link element to add to the statusInfo
         servicesLogs = [
             {
-                "url": f"{self.conf['main']['tmpUrl']}/"
-                f"{self.conf['lenv']['Identifier']}-{self.conf['lenv']['usid']}/"
-                f"{os.path.basename(tool_log)}",
+                "url": os.path.join(self.conf['main']['tmpUrl'],
+                                    f"{self.conf['lenv']['Identifier']}-{self.conf['lenv']['usid']}",
+                                    os.path.basename(tool_log)),
                 "title": f"Tool log {os.path.basename(tool_log)}",
                 "rel": "related",
             }
@@ -311,10 +349,15 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
     exit_status = runner.execute()
 
     if exit_status == zoo.SERVICE_SUCCEEDED:
-        # out = {
-        #    "StacCatalogUri": runner.outputs.outputs["stac"]["value"]["StacCatalogUri"]
-        # }
-        # json_out_string = json.dumps(out, indent=4)
+        # Normalise the id of the workflow output, by renaming to 'stac' regardless of how
+        # it was named in the original Application Package.
+        if "stac" in outputs:
+            output_keys = [key for key in outputs.keys() if key not in ["stac"]]
+            if len(output_keys) > 0:
+                key_to_rename = output_keys[0]
+                logger.info(f"Renaming Workflow output key from '{key_to_rename}' to 'stac'")
+                outputs["stac"].update(outputs.pop(key_to_rename))
+
         outputs["stac"]["value"] = execution_handler.feature_collection
         return zoo.SERVICE_SUCCEEDED
 
