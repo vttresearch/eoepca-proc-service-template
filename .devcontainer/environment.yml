@@ -18,7 +18,7 @@ dependencies:
   - pycalrissian
   - loguru
   - pip:
-    - git+https://github.com/EOEPCA/zoo-calrissian-runner.git@df52e54
+    - git+https://github.com/EOEPCA/zoo-calrissian-runner.git@c5e9b54
     - attrs
     - cwl-utils==0.14
     - kubernetes==28.1.0
