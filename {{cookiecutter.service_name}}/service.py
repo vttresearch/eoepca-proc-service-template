@@ -36,6 +36,8 @@ from zoo_calrissian_runner import ExecutionHandler, ZooCalrissianRunner
 from botocore.client import Config
 from pystac.item_collection import ItemCollection
 
+# For DEBUG
+import traceback
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
@@ -90,144 +92,173 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
     def __init__(self, conf):
         super().__init__()
         self.conf = conf
-        self.domain = self.conf["eoepca"]["domain"]
-        self.workspace_prefix = self.conf["eoepca"]["workspace_prefix"]
-        self.ades_rx_token = self.conf["auth_env"]["jwt"]
+
+        eoepca = self.conf.get("eoepca", {})
+        self.domain = eoepca.get("domain", "")
+        self.workspace_prefix = eoepca.get("workspace_prefix", "")
+        self.use_workspace = bool(self.workspace_prefix)
+
+        auth_env = self.conf.get("auth_env", {})
+        self.ades_rx_token = auth_env.get("jwt", "")
+
         self.feature_collection = None
 
+        self.init_config_defaults(self.conf)
+
     def pre_execution_hook(self):
-        # decode the JWT token to get the user name
-        decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
-        username = self.get_user_name(decoded)
+        try:
+            logger.info("Pre execution hook")
 
-        logger.info("Pre execution hook")
+            # DEBUG
+            # logger.info(f"zzz PRE-HOOK - config...\n{json.dumps(self.conf, indent=2)}\n")
+            
+            # decode the JWT token to get the user name
+            if self.ades_rx_token:
+                self.username = self.get_user_name(
+                    jwt.decode(self.ades_rx_token, options={"verify_signature": False})
+                )
 
-        # Workspace API endpoint
-        uri_for_request = f"workspaces/{self.workspace_prefix}-{username}"
+            if self.use_workspace:
+                logger.info("Lookup storage details in Workspace")
 
-        workspace_api_endpoint = os.path.join(
-            f"https://workspace-api.{self.domain}", uri_for_request
-        )
+                # Workspace API endpoint
+                uri_for_request = f"workspaces/{self.workspace_prefix}-{self.username}"
 
-        # Request: Get Workspace Details
-        headers = {
-            "accept": "application/json",
-            "Authorization": f"Bearer {self.ades_rx_token}",
-        }
-        workspace_response = requests.get(
-            workspace_api_endpoint, headers=headers
-        ).json()
+                workspace_api_endpoint = os.path.join(
+                    f"https://workspace-api.{self.domain}", uri_for_request
+                )
 
-        logger.info("Set user bucket settings")
+                # Request: Get Workspace Details
+                headers = {
+                    "accept": "application/json",
+                    "Authorization": f"Bearer {self.ades_rx_token}",
+                }
+                workspace_response = requests.get(
+                    workspace_api_endpoint, headers=headers
+                ).json()
 
-        storage_credentials = workspace_response["storage"]["credentials"]
+                logger.info("Set user bucket settings")
 
-        self.conf["additional_parameters"] = {
-            "STAGEOUT_AWS_SERVICEURL": storage_credentials.get("endpoint"),
-            "STAGEOUT_AWS_ACCESS_KEY_ID": storage_credentials.get("access"),
-            "STAGEOUT_AWS_SECRET_ACCESS_KEY": storage_credentials.get("secret"),
-            "STAGEOUT_AWS_REGION": storage_credentials.get("region"),
-            "STAGEOUT_OUTPUT": storage_credentials.get("bucketname"),
-            "process": os.path.join("processing-results", self.conf["lenv"]["usid"]),
-            "collection_id": self.conf["lenv"]["usid"],
-        }
+                storage_credentials = workspace_response["storage"]["credentials"]
+
+                self.conf["additional_parameters"]["STAGEOUT_AWS_SERVICEURL"] = storage_credentials.get("endpoint")
+                self.conf["additional_parameters"]["STAGEOUT_AWS_ACCESS_KEY_ID"] = storage_credentials.get("access")
+                self.conf["additional_parameters"]["STAGEOUT_AWS_SECRET_ACCESS_KEY"] = storage_credentials.get("secret")
+                self.conf["additional_parameters"]["STAGEOUT_AWS_REGION"] = storage_credentials.get("region")
+                self.conf["additional_parameters"]["STAGEOUT_OUTPUT"] = storage_credentials.get("bucketname")
+            else:
+                logger.info("Using pre-configured storage details")
+
+            lenv = self.conf.get("lenv", {})
+            self.conf["additional_parameters"]["collection_id"] = lenv.get("usid", "")
+            self.conf["additional_parameters"]["process"] = os.path.join("processing-results", self.conf["additional_parameters"]["collection_id"])
+
+        except Exception as e:
+            logger.error("ERROR in pre_execution_hook...")
+            logger.error(traceback.format_exc())
+            raise(e)
 
     def post_execution_hook(self, log, output, usage_report, tool_logs):
-        logger.info("Post execution hook")
-
-        # decode the JWT token to get the user name
-        decoded = jwt.decode(self.ades_rx_token, options={"verify_signature": False})
-        username = self.get_user_name(decoded)
-
-        # Workspace API endpoint
-        uri_for_request = f"/workspaces/{self.workspace_prefix}-{username}"
-        workspace_api_endpoint = f"https://workspace-api.{self.domain}{uri_for_request}"
-
-        # Request: Get Workspace Details
-        headers = {
-            "accept": "application/json",
-            "Authorization": f"Bearer {self.ades_rx_token}",
-        }
-        workspace_response = requests.get(
-            workspace_api_endpoint, headers=headers
-        ).json()
-
-        storage_credentials = workspace_response["storage"]["credentials"]
-
-        logger.info("Set user bucket settings")
-        os.environ["AWS_S3_ENDPOINT"] = storage_credentials.get("endpoint")
-        os.environ["AWS_ACCESS_KEY_ID"] = storage_credentials.get("access")
-        os.environ["AWS_SECRET_ACCESS_KEY"] = storage_credentials.get("secret")
-        os.environ["AWS_REGION"] = storage_credentials.get("region")
-
-        StacIO.set_default(CustomStacIO)
-
-        logger.info(f"STAC Catalog URI: {output['StacCatalogUri']}")
-
         try:
-            s3_path = output["StacCatalogUri"]
-            if s3_path.count("s3://")==0:
-                s3_path = "s3://" + s3_path
-            cat = read_file( s3_path )
-            # Avoid printing on sys.stdout
-            #cat.describe()
-        except Exception as e:
-            logger.error(f"Exception: {e}")
+            logger.info("Post execution hook")
 
-        headers = {
-            "Accept": "application/json",
-            "Authorization": f"Bearer {self.ades_rx_token}",
-        }
+            # DEBUG
+            # logger.info(f"zzz POST-HOOK - config...\n{json.dumps(self.conf, indent=2)}\n")
 
-        api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{username}"
+            logger.info("Set user bucket settings")
+            os.environ["AWS_S3_ENDPOINT"] = self.conf["additional_parameters"]["STAGEOUT_AWS_SERVICEURL"]
+            os.environ["AWS_ACCESS_KEY_ID"] = self.conf["additional_parameters"]["STAGEOUT_AWS_ACCESS_KEY_ID"]
+            os.environ["AWS_SECRET_ACCESS_KEY"] = self.conf["additional_parameters"]["STAGEOUT_AWS_SECRET_ACCESS_KEY"]
+            os.environ["AWS_REGION"] = self.conf["additional_parameters"]["STAGEOUT_AWS_REGION"]
 
-        logger.info(
-            f"Register collection in workspace {self.workspace_prefix}-{username}"
-        )
-        try:
-            collection = next(cat.get_all_collections())
-        except:
+            StacIO.set_default(CustomStacIO)
+
+            logger.info(f"Read catalog => STAC Catalog URI: {output['StacCatalogUri']}")
             try:
-                items=cat.get_all_items()
-                itemFinal=[]
-                for i in items:
-                    for a in i.assets.keys():
-                        cDict=i.assets[a].to_dict()
-                        cDict["storage:platform"]="EOEPCA"
-                        cDict["storage:requester_pays"]=False
-                        cDict["storage:tier"]="Standard"
-                        cDict["storage:region"]=self.conf["additional_parameters"]["STAGEOUT_AWS_REGION"]
-                        cDict["storage:endpoint"]=self.conf["additional_parameters"]["STAGEOUT_AWS_SERVICEURL"]
-                        i.assets[a]=i.assets[a].from_dict(cDict)
-                    i.collection_id=self.conf["lenv"]["usid"]
-                    itemFinal+=[i.clone()]
-                collection = ItemCollection(items=itemFinal)
+                s3_path = output["StacCatalogUri"]
+                if s3_path.count("s3://")==0:
+                    s3_path = "s3://" + s3_path
+                cat = read_file( s3_path )
             except Exception as e:
-                logger.error(f"Exception: {e}"+str(e))
+                logger.error(f"Exception: {e}")
 
-        logger.info(f"Register collection in the catalog")
-        collection_dict=collection.to_dict()
-        collection_dict["id"]=self.conf["lenv"]["usid"]
-        r = requests.post(
-            f"{api_endpoint}/register-json",
-            json=collection_dict,
-            headers=headers,
-        )
-        logger.info(f"Register collection response: {r.status_code}")
+            collection_id = self.conf["additional_parameters"]["collection_id"]
+            logger.info(f"Create collection with ID {collection_id}")
+            try:
+                collection = next(cat.get_all_collections())
+            except:
+                try:
+                    items=cat.get_all_items()
+                    itemFinal=[]
+                    for i in items:
+                        for a in i.assets.keys():
+                            cDict=i.assets[a].to_dict()
+                            cDict["storage:platform"]="EOEPCA"
+                            cDict["storage:requester_pays"]=False
+                            cDict["storage:tier"]="Standard"
+                            cDict["storage:region"]=self.conf["additional_parameters"]["STAGEOUT_AWS_REGION"]
+                            cDict["storage:endpoint"]=self.conf["additional_parameters"]["STAGEOUT_AWS_SERVICEURL"]
+                            i.assets[a]=i.assets[a].from_dict(cDict)
+                        i.collection_id=collection_id
+                        itemFinal+=[i.clone()]
+                    collection = ItemCollection(items=itemFinal)
+                except Exception as e:
+                    logger.error(f"Exception: {e}"+str(e))
+            collection_dict=collection.to_dict()
+            collection_dict["id"]=collection_id
 
-        # TODO pool the catalog until the collection is available
-        #self.feature_collection = requests.get(
-        #    f"{api_endpoint}/collections/{collection.id}", headers=headers
-        #).json()
+            # Set the feature collection to be returned
+            self.feature_collection = str(collection_dict)
 
-        # Set the feature collection to be returned
-        self.feature_collection = str(collection_dict)
-        
-        logger.info(f"Register the collection and associated items to the catalog and to the harvester")
-        r = requests.post(f"{api_endpoint}/register",
-                        json={"type": "stac-item", "url": collection.get_self_href()},
-                        headers=headers,)
-        logger.info(f"Register collection response: {r.status_code}")
+            # Register with the workspace
+            if self.use_workspace:
+                logger.info(f"Register collection in workspace {self.workspace_prefix}-{self.username}")
+                headers = {
+                    "Accept": "application/json",
+                    "Authorization": f"Bearer {self.ades_rx_token}",
+                }
+                api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{self.username}"
+                r = requests.post(
+                    f"{api_endpoint}/register-json",
+                    json=collection_dict,
+                    headers=headers,
+                )
+                logger.info(f"Register collection response: {r.status_code}")
+
+                # TODO pool the catalog until the collection is available
+                #self.feature_collection = requests.get(
+                #    f"{api_endpoint}/collections/{collection.id}", headers=headers
+                #).json()
+            
+                logger.info(f"Register processing results to collection")
+                r = requests.post(f"{api_endpoint}/register",
+                                json={"type": "stac-item", "url": collection.get_self_href()},
+                                headers=headers,)
+                logger.info(f"Register processing results response: {r.status_code}")
+
+        except Exception as e:
+            logger.error("ERROR in post_execution_hook...")
+            logger.error(traceback.format_exc())
+            raise(e)
+
+    @staticmethod
+    def init_config_defaults(conf):
+        if "additional_parameters" not in conf:
+            conf["additional_parameters"] = {}
+
+        conf["additional_parameters"]["STAGEIN_AWS_SERVICEURL"] = os.environ.get("STAGEIN_AWS_SERVICEURL", "http://s3-service.zoo.svc.cluster.local:9000")
+        conf["additional_parameters"]["STAGEIN_AWS_ACCESS_KEY_ID"] = os.environ.get("STAGEIN_AWS_ACCESS_KEY_ID", "minio-admin")
+        conf["additional_parameters"]["STAGEIN_AWS_SECRET_ACCESS_KEY"] = os.environ.get("STAGEIN_AWS_SECRET_ACCESS_KEY", "minio-secret-password")
+        conf["additional_parameters"]["STAGEIN_AWS_REGION"] = os.environ.get("STAGEIN_AWS_REGION", "RegionOne")
+
+        conf["additional_parameters"]["STAGEOUT_AWS_SERVICEURL"] = os.environ.get("STAGEOUT_AWS_SERVICEURL", "http://s3-service.zoo.svc.cluster.local:9000")
+        conf["additional_parameters"]["STAGEOUT_AWS_ACCESS_KEY_ID"] = os.environ.get("STAGEOUT_AWS_ACCESS_KEY_ID", "minio-admin")
+        conf["additional_parameters"]["STAGEOUT_AWS_SECRET_ACCESS_KEY"] = os.environ.get("STAGEOUT_AWS_SECRET_ACCESS_KEY", "minio-secret-password")
+        conf["additional_parameters"]["STAGEOUT_AWS_REGION"] = os.environ.get("STAGEOUT_AWS_REGION", "RegionOne")
+        conf["additional_parameters"]["STAGEOUT_OUTPUT"] = os.environ.get("STAGEOUT_OUTPUT", "s3://processingresults")
+
+        # DEBUG
+        # logger.info(f"init_config_defaults: additional_parameters...\n{json.dumps(conf['additional_parameters'], indent=2)}\n")
 
     @staticmethod
     def get_user_name(decodedJwt) -> str:
@@ -287,80 +318,93 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         :param tool_logs: A list of paths to individual workflow step logs.
 
         """
+        try:
+            logger.info("handle_outputs")
 
-        logger.info("handle_outputs")
-
-        # link element to add to the statusInfo
-        servicesLogs = [
-            {
-                "url": os.path.join(self.conf['main']['tmpUrl'],
-                                    f"{self.conf['lenv']['Identifier']}-{self.conf['lenv']['usid']}",
-                                    os.path.basename(tool_log)),
-                "title": f"Tool log {os.path.basename(tool_log)}",
-                "rel": "related",
-            }
-            for tool_log in tool_logs
-        ]
-        for i in range(len(servicesLogs)):
-            okeys = ["url", "title", "rel"]
-            keys = ["url", "title", "rel"]
-            if i > 0:
+            # link element to add to the statusInfo
+            servicesLogs = [
+                {
+                    "url": os.path.join(self.conf['main']['tmpUrl'],
+                                        f"{self.conf['lenv']['Identifier']}-{self.conf['lenv']['usid']}",
+                                        os.path.basename(tool_log)),
+                    "title": f"Tool log {os.path.basename(tool_log)}",
+                    "rel": "related",
+                }
+                for tool_log in tool_logs
+            ]
+            for i in range(len(servicesLogs)):
+                okeys = ["url", "title", "rel"]
+                keys = ["url", "title", "rel"]
+                if i > 0:
+                    for j in range(len(keys)):
+                        keys[j] = keys[j] + "_" + str(i)
+                if "service_logs" not in self.conf:
+                    self.conf["service_logs"] = {}
                 for j in range(len(keys)):
-                    keys[j] = keys[j] + "_" + str(i)
-            if "service_logs" not in self.conf:
-                self.conf["service_logs"] = {}
-            for j in range(len(keys)):
-                self.conf["service_logs"][keys[j]] = servicesLogs[i][okeys[j]]
+                    self.conf["service_logs"][keys[j]] = servicesLogs[i][okeys[j]]
 
-        self.conf["service_logs"]["length"] = str(len(servicesLogs))
+            self.conf["service_logs"]["length"] = str(len(servicesLogs))
+
+        except Exception as e:
+            logger.error("ERROR in handle_outputs...")
+            logger.error(traceback.format_exc())
+            raise(e)
 
 
 def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # noqa
 
-    with open(
-        os.path.join(
-            pathlib.Path(os.path.realpath(__file__)).parent.absolute(),
-            "app-package.cwl",
-        ),
-        "r",
-    ) as stream:
-        cwl = yaml.safe_load(stream)
+    try:
+        with open(
+            os.path.join(
+                pathlib.Path(os.path.realpath(__file__)).parent.absolute(),
+                "app-package.cwl",
+            ),
+            "r",
+        ) as stream:
+            cwl = yaml.safe_load(stream)
 
-    execution_handler = EoepcaCalrissianRunnerExecutionHandler(conf=conf)
+        execution_handler = EoepcaCalrissianRunnerExecutionHandler(conf=conf)
 
-    runner = ZooCalrissianRunner(
-        cwl=cwl,
-        conf=conf,
-        inputs=inputs,
-        outputs=outputs,
-        execution_handler=execution_handler,
-    )
+        runner = ZooCalrissianRunner(
+            cwl=cwl,
+            conf=conf,
+            inputs=inputs,
+            outputs=outputs,
+            execution_handler=execution_handler,
+        )
 
-    # we are changing the working directory to store the outputs
-    # in a directory dedicated to this execution
-    working_dir = os.path.join(conf["main"]["tmpPath"], runner.get_namespace_name())
-    os.makedirs(
-        working_dir,
-        mode=0o777,
-        exist_ok=True,
-    )
-    os.chdir(working_dir)
+        # we are changing the working directory to store the outputs
+        # in a directory dedicated to this execution
+        working_dir = os.path.join(conf["main"]["tmpPath"], runner.get_namespace_name())
+        os.makedirs(
+            working_dir,
+            mode=0o777,
+            exist_ok=True,
+        )
+        os.chdir(working_dir)
 
-    exit_status = runner.execute()
+        exit_status = runner.execute()
 
-    if exit_status == zoo.SERVICE_SUCCEEDED:
-        # Normalise the id of the workflow output, by renaming to 'stac' regardless of how
-        # it was named in the original Application Package.
-        if "stac" in outputs:
-            output_keys = [key for key in outputs.keys() if key not in ["stac"]]
-            if len(output_keys) > 0:
-                key_to_rename = output_keys[0]
-                logger.info(f"Renaming Workflow output key from '{key_to_rename}' to 'stac'")
-                outputs["stac"].update(outputs.pop(key_to_rename))
+        if exit_status == zoo.SERVICE_SUCCEEDED:
+            # Normalise the id of the workflow output, by renaming to 'stac' regardless of how
+            # it was named in the original Application Package.
+            if "stac" in outputs:
+                output_keys = [key for key in outputs.keys() if key not in ["stac"]]
+                if len(output_keys) > 0:
+                    key_to_rename = output_keys[0]
+                    logger.info(f"Renaming Workflow output key from '{key_to_rename}' to 'stac'")
+                    outputs["stac"].update(outputs.pop(key_to_rename))
 
-        outputs["stac"]["value"] = execution_handler.feature_collection
-        return zoo.SERVICE_SUCCEEDED
+            outputs["stac"]["value"] = execution_handler.feature_collection
+            return zoo.SERVICE_SUCCEEDED
 
-    else:
-        conf["lenv"]["message"] = zoo._("Execution failed")
+        else:
+            conf["lenv"]["message"] = zoo._("Execution failed")
+            return zoo.SERVICE_FAILED
+
+    except Exception as e:
+        logger.error("ERROR in processing execution template...")
+        stack = traceback.format_exc()
+        logger.error(stack)
+        conf["lenv"]["message"] = zoo._(f"Exception during execution...\n{stack}\n")
         return zoo.SERVICE_FAILED
