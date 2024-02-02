@@ -208,7 +208,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             collection_dict["id"]=collection_id
 
             # Set the feature collection to be returned
-            self.feature_collection = str(collection_dict)
+            self.feature_collection = json.dumps(collection_dict, indent=2)
 
             # Register with the workspace
             if self.use_workspace:
