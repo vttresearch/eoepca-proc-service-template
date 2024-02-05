@@ -184,8 +184,10 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
 
             collection_id = self.conf["additional_parameters"]["collection_id"]
             logger.info(f"Create collection with ID {collection_id}")
+            collection = None
             try:
                 collection = next(cat.get_all_collections())
+                logger.info("Got collection from outputs")
             except:
                 try:
                     items=cat.get_all_items()
@@ -202,8 +204,16 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
                         i.collection_id=collection_id
                         itemFinal+=[i.clone()]
                     collection = ItemCollection(items=itemFinal)
+                    logger.info("Created collection from items")
                 except Exception as e:
                     logger.error(f"Exception: {e}"+str(e))
+            
+            # Trap the case of no output collection
+            if collection is None:
+                logger.error("ABORT: The output collection is empty")
+                self.feature_collection = json.dumps({}, indent=2)
+                return
+
             collection_dict=collection.to_dict()
             collection_dict["id"]=collection_id
 
@@ -372,6 +382,8 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
             outputs=outputs,
             execution_handler=execution_handler,
         )
+        # DEBUG
+        # runner.monitor_interval = 1
 
         # we are changing the working directory to store the outputs
         # in a directory dedicated to this execution
