@@ -398,16 +398,8 @@ def {{cookiecutter.workflow_id |replace("-", "_")  }}(conf, inputs, outputs): # 
         exit_status = runner.execute()
 
         if exit_status == zoo.SERVICE_SUCCEEDED:
-            # Normalise the id of the workflow output, by renaming to 'stac' regardless of how
-            # it was named in the original Application Package.
-            if "stac" in outputs:
-                output_keys = [key for key in outputs.keys() if key not in ["stac"]]
-                if len(output_keys) > 0:
-                    key_to_rename = output_keys[0]
-                    logger.info(f"Renaming Workflow output key from '{key_to_rename}' to 'stac'")
-                    outputs["stac"].update(outputs.pop(key_to_rename))
-
-            outputs["stac"]["value"] = execution_handler.feature_collection
+            logger.info(f"Setting Collection into output key {list(outputs.keys())[0]}")
+            outputs[list(outputs.keys())[0]]["value"] = execution_handler.feature_collection
             return zoo.SERVICE_SUCCEEDED
 
         else:
