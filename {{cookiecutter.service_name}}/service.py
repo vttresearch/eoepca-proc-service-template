@@ -272,7 +272,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
 
     @staticmethod
     def get_user_name(decodedJwt) -> str:
-        for key in ["username", "user_name"]:
+        for key in ["username", "user_name", "preferred_username"]:
             if key in decodedJwt:
                 return decodedJwt[key]
         return ""
