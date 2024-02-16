@@ -133,19 +133,28 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
                     "accept": "application/json",
                     "Authorization": f"Bearer {self.ades_rx_token}",
                 }
-                workspace_response = requests.get(
-                    workspace_api_endpoint, headers=headers
-                ).json()
+                get_workspace_details_response = requests.get(workspace_api_endpoint, headers=headers)
 
-                logger.info("Set user bucket settings")
+                # GOOD response from Workspace API - use the details
+                if get_workspace_details_response.ok:
+                    workspace_response = get_workspace_details_response.json()
 
-                storage_credentials = workspace_response["storage"]["credentials"]
+                    logger.info("Set user bucket settings")
 
-                self.conf["additional_parameters"]["STAGEOUT_AWS_SERVICEURL"] = storage_credentials.get("endpoint")
-                self.conf["additional_parameters"]["STAGEOUT_AWS_ACCESS_KEY_ID"] = storage_credentials.get("access")
-                self.conf["additional_parameters"]["STAGEOUT_AWS_SECRET_ACCESS_KEY"] = storage_credentials.get("secret")
-                self.conf["additional_parameters"]["STAGEOUT_AWS_REGION"] = storage_credentials.get("region")
-                self.conf["additional_parameters"]["STAGEOUT_OUTPUT"] = storage_credentials.get("bucketname")
+                    storage_credentials = workspace_response["storage"]["credentials"]
+
+                    self.conf["additional_parameters"]["STAGEOUT_AWS_SERVICEURL"] = storage_credentials.get("endpoint")
+                    self.conf["additional_parameters"]["STAGEOUT_AWS_ACCESS_KEY_ID"] = storage_credentials.get("access")
+                    self.conf["additional_parameters"]["STAGEOUT_AWS_SECRET_ACCESS_KEY"] = storage_credentials.get("secret")
+                    self.conf["additional_parameters"]["STAGEOUT_AWS_REGION"] = storage_credentials.get("region")
+                    self.conf["additional_parameters"]["STAGEOUT_OUTPUT"] = storage_credentials.get("bucketname")
+                # BAD response from Workspace API - fallback to the 'pre-configured storage details'
+                else:
+                    logger.error("Problem connecting with the Workspace API")
+                    logger.info(f"  Response code = {get_workspace_details_response.status_code}")
+                    logger.info(f"  Response text = \n{get_workspace_details_response.text}")
+                    self.use_workspace = False
+                    logger.info("Using pre-configured storage details")
             else:
                 logger.info("Using pre-configured storage details")
 
@@ -265,7 +274,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         conf["additional_parameters"]["STAGEOUT_AWS_ACCESS_KEY_ID"] = os.environ.get("STAGEOUT_AWS_ACCESS_KEY_ID", "minio-admin")
         conf["additional_parameters"]["STAGEOUT_AWS_SECRET_ACCESS_KEY"] = os.environ.get("STAGEOUT_AWS_SECRET_ACCESS_KEY", "minio-secret-password")
         conf["additional_parameters"]["STAGEOUT_AWS_REGION"] = os.environ.get("STAGEOUT_AWS_REGION", "RegionOne")
-        conf["additional_parameters"]["STAGEOUT_OUTPUT"] = os.environ.get("STAGEOUT_OUTPUT", "s3://processingresults")
+        conf["additional_parameters"]["STAGEOUT_OUTPUT"] = os.environ.get("STAGEOUT_OUTPUT", "eoepca")
 
         # DEBUG
         # logger.info(f"init_config_defaults: additional_parameters...\n{json.dumps(conf['additional_parameters'], indent=2)}\n")
