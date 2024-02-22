@@ -93,10 +93,16 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         super().__init__()
         self.conf = conf
 
+        self.http_proxy_env = os.environ.get("HTTP_PROXY", None)
+
         eoepca = self.conf.get("eoepca", {})
         self.domain = eoepca.get("domain", "")
+        self.workspace_url = eoepca.get("workspace_url", "")
         self.workspace_prefix = eoepca.get("workspace_prefix", "")
-        self.use_workspace = bool(self.workspace_prefix)
+        if self.workspace_url and self.workspace_prefix:
+            self.use_workspace = True
+        else:
+            self.use_workspace = False
 
         auth_env = self.conf.get("auth_env", {})
         self.ades_rx_token = auth_env.get("jwt", "")
@@ -108,6 +114,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
     def pre_execution_hook(self):
         try:
             logger.info("Pre execution hook")
+            self.unset_http_proxy_env()
 
             # DEBUG
             # logger.info(f"zzz PRE-HOOK - config...\n{json.dumps(self.conf, indent=2)}\n")
@@ -124,9 +131,8 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
                 # Workspace API endpoint
                 uri_for_request = f"workspaces/{self.workspace_prefix}-{self.username}"
 
-                workspace_api_endpoint = os.path.join(
-                    f"https://workspace-api.{self.domain}", uri_for_request
-                )
+                workspace_api_endpoint = os.path.join(self.workspace_url, uri_for_request)
+                logger.info(f"Using Workspace API endpoint {workspace_api_endpoint}")
 
                 # Request: Get Workspace Details
                 headers = {
@@ -166,10 +172,14 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             logger.error("ERROR in pre_execution_hook...")
             logger.error(traceback.format_exc())
             raise(e)
+        
+        finally:
+            self.restore_http_proxy_env()
 
     def post_execution_hook(self, log, output, usage_report, tool_logs):
         try:
             logger.info("Post execution hook")
+            self.unset_http_proxy_env()
 
             # DEBUG
             # logger.info(f"zzz POST-HOOK - config...\n{json.dumps(self.conf, indent=2)}\n")
@@ -236,7 +246,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
                     "Accept": "application/json",
                     "Authorization": f"Bearer {self.ades_rx_token}",
                 }
-                api_endpoint = f"https://workspace-api.{self.domain}/workspaces/{self.workspace_prefix}-{self.username}"
+                api_endpoint = f"{self.workspace_url}/workspaces/{self.workspace_prefix}-{self.username}"
                 r = requests.post(
                     f"{api_endpoint}/register-json",
                     json=collection_dict,
@@ -259,6 +269,18 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             logger.error("ERROR in post_execution_hook...")
             logger.error(traceback.format_exc())
             raise(e)
+        
+        finally:
+            self.restore_http_proxy_env()
+
+    def unset_http_proxy_env(self):
+        http_proxy = os.environ.pop("HTTP_PROXY", None)
+        logger.info(f"Unsetting env HTTP_PROXY, whose value was {http_proxy}")
+
+    def restore_http_proxy_env(self):
+        if self.http_proxy_env:
+            os.environ["HTTP_PROXY"] = self.http_proxy_env
+            logger.info(f"Restoring env HTTP_PROXY, to value {self.http_proxy_env}")
 
     @staticmethod
     def init_config_defaults(conf):
