@@ -279,7 +279,7 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
             
                 logger.info(f"Register processing results to collection")
                 r = requests.post(f"{api_endpoint}/register",
-                                json={"type": "stac-item", "url": collection.get_self_href()},
+                                json={"type": "stac-item", "url": s3_path},
                                 headers=headers,)
                 logger.info(f"Register processing results response: {r.status_code}")
 
