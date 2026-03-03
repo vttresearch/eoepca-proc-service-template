@@ -276,12 +276,20 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
                 #self.feature_collection = requests.get(
                 #    f"{api_endpoint}/collections/{collection.id}", headers=headers
                 #).json()
-            
-                logger.info(f"Register processing results to collection")
-                r = requests.post(f"{api_endpoint}/register",
-                                json={"type": "stac-item", "url": s3_path},
-                                headers=headers,)
-                logger.info(f"Register processing results response: {r.status_code}")
+                # Fix 3.3.20206: ENMAP results failed to register correctly with endpoint /register
+                items=cat.get_all_items()
+                for i in items:
+                    r = requests.post(
+                        f"{api_endpoint}/register-json",
+                        json=i.to_dict(),
+                        headers=headers,
+                    )
+                    logger.info(f"Register processing results response: {r.status_code}")
+#                logger.info(f"Register processing results to collection")
+#                r = requests.post(f"{api_endpoint}/register",
+#                                json={"type": "stac-item", "url": s3_path},
+#                                headers=headers,)
+#                logger.info(f"Register processing results response: {r.status_code}")
 
         except Exception as e:
             logger.error("ERROR in post_execution_hook...")
@@ -356,6 +364,11 @@ class EoepcaCalrissianRunnerExecutionHandler(ExecutionHandler):
         logger.info("get_pod_node_selector")
 
         return self.conf.get("pod_node_selector", {})
+
+    def get_pod_tolerations(self):
+        logger.info("get_pod_tolerations")
+
+        return self.conf.get("pod_tolerations", [])
 
     def get_secrets(self):
         logger.info("get_secrets")
